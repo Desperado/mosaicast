@@ -4,7 +4,8 @@ import { useApp } from '../state/app';
 import { BackHeader, Button, Card, Copy, Screen, styles } from '../components/ui';
 
 export default function Settings() {
-  const { t, preferences, savePreferences } = useApp();
+  const { t, ready, preferences, savePreferences } = useApp();
+  if (!ready) return <Screen><Copy>{t('loading')}</Copy></Screen>;
   return <Screen>
     <BackHeader title={t('settings')}/>
     <View style={styles.smallStack}><Copy kind="title">{t('settings')}</Copy><Copy kind="small">{t('settingsBody')}</Copy></View>

@@ -21,7 +21,8 @@ export const en = {
   localTitle: 'Your room, your network', localBody: 'No account or credentials needed for this demo. Your saved address stays on this device.',
   appearance: 'Appearance', language: 'Language', system: 'System', english: 'English', ukrainian: 'Українська', light: 'Light', dark: 'Dark',
   settingsBody: 'Make it feel like your room.', preferenceHint: 'System follows your device. Other languages fall back to English.',
-  saveError: 'Preferences could not be saved. They will last for this session only. Try again.', retrySave: 'Save again', loadError: 'Saved preferences could not be read. Using defaults for this session.',
+  saveError: 'Preferences could not be saved. They will last for this session only. Try again.', retrySave: 'Save again', loadError: 'Saved preferences could not be read. Retry reading them, or reset preferences to overwrite them with defaults.',
+  retryLoad: 'Read preferences again', resetPreferences: 'Reset preferences',
   about: 'Made to be open', aboutBody: 'Mosaicast · MIT licensed. An independent project, unaffiliated with Yamaha. Fictional tracks and original mosaic artwork.',
   showWelcome: 'Show welcome', demoVolume: 'Simulated volume · use − and +',
 } as const;
@@ -50,7 +51,8 @@ export const uk: Record<TranslationKey, string> = {
   localTitle: 'Твоя кімната, твоя мережа', localBody: 'Для демо не потрібні обліковий запис чи паролі. Збережена адреса залишається на цьому пристрої.',
   appearance: 'Оформлення', language: 'Мова', system: 'Системна', english: 'English', ukrainian: 'Українська', light: 'Світла', dark: 'Темна',
   settingsBody: 'Нехай усе буде по-твоєму.', preferenceHint: 'Системний режим використовує налаштування пристрою. Для інших мов обирається англійська.',
-  saveError: 'Не вдалося зберегти налаштування. Вони діятимуть лише в цьому сеансі. Спробуй ще раз.', retrySave: 'Зберегти ще раз', loadError: 'Не вдалося прочитати збережені налаштування. У цьому сеансі використано типові.',
+  saveError: 'Не вдалося зберегти налаштування. Вони діятимуть лише в цьому сеансі. Спробуй ще раз.', retrySave: 'Зберегти ще раз', loadError: 'Не вдалося прочитати збережені налаштування. Спробуй прочитати їх ще раз або скинь налаштування, щоб замінити їх типовими.',
+  retryLoad: 'Прочитати налаштування ще раз', resetPreferences: 'Скинути налаштування',
   about: 'Створено відкритим', aboutBody: 'Mosaicast · ліцензія MIT. Незалежний проєкт, не пов’язаний із Yamaha. Вигадані композиції та оригінальні мозаїки.',
   showWelcome: 'Показати привітання', demoVolume: 'Імітація гучності · натискай − та +',
 };

@@ -53,10 +53,15 @@ export function BackHeader({ title }: { title: string }) {
   return <View style={styles.spread}><IconButton name="back" label={t('back')} onPress={() => router.canGoBack() ? router.back() : router.replace('/')}/><Copy kind="small">{title}</Copy><DemoBadge/></View>;
 }
 export function Screen({ children }: { children: ReactNode }) {
-  const { colors, storageError, savePreferences, t } = useApp();
+  const { colors, storageError, savePreferences, retryLoadPreferences, resetPreferences, t } = useApp();
   return <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.background }}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, paddingBottom: 36, gap: 24, flexGrow: 1, maxWidth: 600, width: '100%', alignSelf: 'center' }}>
-      {storageError && <Card><Text accessibilityRole="alert" style={{ color: colors.text, fontSize: 14, lineHeight: 21 }}>{t(storageError)}</Text><Button label={t('retrySave')} onPress={() => void savePreferences({})}/></Card>}
+      {storageError && <Card>
+        <Text accessibilityRole="alert" style={{ color: colors.text, fontSize: 14, lineHeight: 21 }}>{t(storageError)}</Text>
+        {storageError === 'loadError'
+          ? <><Button label={t('retryLoad')} onPress={() => void retryLoadPreferences()}/><Button label={t('resetPreferences')} onPress={() => void resetPreferences()}/></>
+          : <Button label={t('retrySave')} onPress={() => void savePreferences({})}/>}
+      </Card>}
       {children}
     </ScrollView>
   </SafeAreaView>;
