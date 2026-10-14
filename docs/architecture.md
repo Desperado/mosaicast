@@ -18,8 +18,26 @@ on npm. Metro consumes their TypeScript source; adapter tests compile to ignored
 - `packages/design` owns platform-independent design tokens. System fonts avoid
   remote font loading and support Ukrainian text; final typography remains open.
 
-Native components will be built from the handoff, not embedded prototype HTML.
+Native components are built from the handoff, rather than embedded prototype HTML.
 Unknown-license runtime files from the supplied archive are not included.
+
+## Mobile design state
+
+An app provider owns two independent demo controllers, their snapshots, and the
+active room. Commands are locked per room, including before React renders the
+busy state. Rooms and playback are session-only fixtures; they are never saved
+as discovered hardware. CD and radio examples hide unsupported track controls.
+
+AsyncStorage holds one versioned preferences record: appearance, language,
+onboarding completion, and a draft private IPv4 address. System preferences
+follow React Native's color-scheme hook and Expo Localization's locale hook;
+unsupported system languages fall back to English. Writes are queued in order,
+including after an earlier failure, and failure is shown with a retry action.
+Malformed records produce a visible load error and session defaults.
+
+The Connection screen validates and saves an address only. No real client is
+created, and the screen explicitly says that no connection was made. No new
+local-network permission or HTTP transport exception is needed for this demo.
 
 ## Local device adapter
 
@@ -33,7 +51,7 @@ parameters. Read requests time out after five seconds; redirects are rejected.
 The private-address check is deliberately conservative: hostnames, IPv6,
 loopback, public addresses, and addresses ending in .0/.255 are unsupported.
 There is no automatic discovery, catalog browser, authentication flow, event
-listener, caching, room grouping, absolute-volume slider, or mobile storage yet.
+listener, caching, room grouping, absolute-volume slider, or persisted device registry yet.
 Connectivity labels describe advertised support, not enabled settings.
 
 Commands are serialized per client. A write is sent once; only observation reads
