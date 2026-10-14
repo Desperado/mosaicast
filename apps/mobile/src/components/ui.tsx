@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle, type TextProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useApp } from '../state/app';
@@ -11,9 +11,9 @@ export const styles = StyleSheet.create({
   stack: { gap: 16 }, smallStack: { gap: 8 },
 });
 
-export function Copy({ children, kind = 'body', color, style }: { children: ReactNode; kind?: 'body' | 'title' | 'heading' | 'small' | 'label'; color?: string; style?: StyleProp<import('react-native').TextStyle> }) {
+export function Copy({ children, kind = 'body', color, style, accessibilityRole }: { children: ReactNode; kind?: 'body' | 'title' | 'heading' | 'small' | 'label'; color?: string; style?: StyleProp<import('react-native').TextStyle>; accessibilityRole?: TextProps['accessibilityRole'] }) {
   const { colors } = useApp();
-  return <Text style={[{ color: color ?? (kind === 'small' || kind === 'label' ? colors.muted : colors.text) }, typography[kind], style]}>{children}</Text>;
+  return <Text accessibilityRole={accessibilityRole} style={[{ color: color ?? (kind === 'small' || kind === 'label' ? colors.muted : colors.text) }, typography[kind], style]}>{children}</Text>;
 }
 const typography = StyleSheet.create({
   body: { fontSize: 16, lineHeight: 24 }, title: { fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.9 },
@@ -49,8 +49,8 @@ export function DemoBadge() {
   return <View style={{ backgroundColor: colors.tint, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 }}><Copy kind="small" color={colors.accent}>{t('demo')}</Copy></View>;
 }
 export function BackHeader({ title }: { title: string }) {
-  const { t } = useApp();
-  return <View style={styles.spread}><IconButton name="back" label={t('back')} onPress={() => router.canGoBack() ? router.back() : router.replace('/')}/><Copy kind="small">{title}</Copy><DemoBadge/></View>;
+  const { t, real } = useApp();
+  return <View style={styles.spread}><IconButton name="back" label={t('back')} onPress={() => router.canGoBack() ? router.back() : router.replace('/')}/><Copy kind="small">{title}</Copy>{!real && <DemoBadge/>}</View>;
 }
 export function Screen({ children }: { children: ReactNode }) {
   const { colors, storageError, savePreferences, t } = useApp();

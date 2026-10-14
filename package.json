@@ -23,9 +23,10 @@
     "web": "npm run web --workspace @mosaicast/mobile",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && node --test tools/*.test.cjs",
     "check": "npm run lint && npm run typecheck && npm test",
-    "bundle:check": "npm run export:web --workspace @mosaicast/mobile"
+    "bundle:check": "npm run export:web --workspace @mosaicast/mobile",
+    "bridge": "npm run build --workspace @mosaicast/musiccast && node tools/bridge.cjs"
   },
   "devDependencies": {
     "typescript": "~6.0.3",

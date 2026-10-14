@@ -4,14 +4,11 @@ import { useApp } from '../state/app';
 import { Button, Copy, Mosaic, Screen, styles } from '../components/ui';
 
 export default function Welcome() {
-  const { ready, preferences, savePreferences, colors, t } = useApp();
+  const { ready, preferences, savePreferences, startDemo, colors, t } = useApp();
   const { welcome } = useLocalSearchParams<{ welcome?: string }>();
   if (!ready) return <Screen><Copy>{t('loading')}</Copy></Screen>;
   if (preferences.demoStarted && welcome !== '1') return <Redirect href="/(tabs)/listen"/>;
-  function startDemo() {
-    void savePreferences({ demoStarted: true });
-    router.replace('/(tabs)/listen');
-  }
+
   return <Screen>
     <View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap' }]}>
       <Button label="English" selected={preferences.language === 'en'} onPress={() => void savePreferences({ language: 'en' })}/>
@@ -24,7 +21,7 @@ export default function Welcome() {
       <Copy color={colors.muted} style={{ textAlign: 'center', maxWidth: 310, alignSelf: 'center' }}>{t('welcomeBody')}</Copy>
     </View>
     <View style={styles.stack}>
-      <Button label={t('tryDemo')} primary onPress={startDemo}/>
+      <Button label={t('tryDemo')} primary onPress={() => { startDemo(); router.replace('/(tabs)/listen'); }}/>
       <Button label={t('connectByIP')} icon="connection" onPress={() => router.push('/connection')}/>
       <Copy kind="small" style={{ textAlign: 'center' }}>{t('independent')}</Copy>
     </View>

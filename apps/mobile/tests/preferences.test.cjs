@@ -23,6 +23,12 @@ test('system preferences follow OS values without overriding explicit choices', 
   assert.equal(resolveAppearance('dark', 'light'), 'dark');
 });
 
+test('a saved draft address never opts an old demo installation into live control', () => {
+  const old = { version: 1, demoStarted: true, address: '192.168.1.40' };
+  assert.equal(parsePreferences(JSON.stringify(old)).mode, 'demo');
+  assert.equal(parsePreferences(JSON.stringify({ ...old, mode: 'device' })).mode, 'device');
+});
+
 test('rapid changes persist in order even when an earlier write fails', async () => {
   const calls = [];
   let release;
