@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      expo:
+        patterns: ['expo*', 'react', 'react-dom', 'react-native*', '@types/react']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

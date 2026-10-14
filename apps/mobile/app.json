@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Mosaicast",
+    "slug": "mosaicast",
+    "scheme": "mosaicast",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {},
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
