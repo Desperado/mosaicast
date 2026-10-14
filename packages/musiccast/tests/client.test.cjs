@@ -137,3 +137,18 @@ test('demo instances and returned snapshots cannot change another room', async (
   assert.equal((await a.read()).track, undefined);
   assert.equal((await b.read()).status.power, 'on');
 });
+
+
+test('demo skips wrap through fictional tracks and clear unsupported-source metadata', async () => {
+  const controller = demoController();
+  const original = (await controller.read()).track.title;
+  await controller.execute({ type: 'playback', value: 'previous' });
+  assert.notEqual((await controller.read()).track.title, original);
+  await controller.execute({ type: 'playback', value: 'next' });
+  assert.equal((await controller.read()).track.title, original);
+  await controller.execute({ type: 'input', value: 'cd' });
+  assert.equal((await controller.read()).track, undefined);
+  await controller.execute({ type: 'input', value: 'server' });
+  assert.equal((await controller.read()).track.title, original);
+  assert.equal((await controller.read()).track.playback, 'stop');
+});
