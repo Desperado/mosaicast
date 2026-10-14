@@ -4,10 +4,14 @@ An independent, open-source MusicCast controller for iOS and Android, built in
 TypeScript. The aim is a fast, clear listening experience with English and
 Ukrainian, discovered device capabilities, and visible command outcomes.
 
-**Status: foundation scaffold, not a replacement app ready for daily use.**
+**Status: mobile design demo, not a replacement app ready for daily use.**
 The mobile app currently runs an isolated demo. It sends no network requests
-or device commands. It has bilingual copy, light/dark themes, example source
-selection, power, volume, and play/pause. Preferences reset when restarted.
+or device commands. It has onboarding, Listen, Rooms, Connection, and Settings
+screens with bilingual copy, source selection, power, volume, mute, and transport.
+Two fictional rooms have separate playback state. Appearance and language follow
+the device by default; explicit choices, onboarding completion, and a draft
+private IPv4 address persist locally. The Connection screen saves an address
+without contacting it. Demo playback resets when restarted.
 The shared local MusicCast adapter is implemented and tested with simulated
 responses, but it is not connected to the mobile UI yet. The earlier desktop
 controller's hardware checks do not establish mobile compatibility.
@@ -35,7 +39,7 @@ npm ci
 npm run dev
 npm run ios       # requires a configured iOS simulator on macOS
 npm run android   # requires a configured Android emulator
-npm run web      # browser preview of the mobile foundation
+npm run web       # browser preview of the mobile design
 ```
 
 Dependencies are pinned by the root `package-lock.json`. Run installs from the
@@ -44,7 +48,7 @@ For native Expo dependencies, use `npx expo install <package>` in `apps/mobile`.
 Router and Metro follow [Expo's monorepo setup](https://docs.expo.dev/guides/monorepos/).
 
 ```bash
-npm run check          # lint, all workspace typechecks, adapter/i18n tests
+npm run check          # lint, all workspace typechecks, adapter/i18n/preferences tests
 npm run bundle:check   # Expo web production export, including shared packages
 ```
 
@@ -56,11 +60,11 @@ The dependency audit currently reports upstream advisories. See
 
 ## Implementation order
 
-1. Port onboarding, Listen, Rooms, and Library from the design handoff; persist
-   theme/language preferences and follow OS preferences.
+1. Validate the implemented onboarding, Listen, Rooms, Connection, and Settings
+   screens on iOS and Android, including safe areas, keyboards, and accessibility.
 2. Connect the adapter using native local-network permissions, device storage,
    fresh capability reads, and explicit pending/confirmed/uncertain outcomes.
-3. Add device-aware browsing, artwork, discovery, and multiroom functions.
+3. Add Library, device-aware browsing, artwork, discovery, and multiroom functions.
 4. Add optional companion and AI features behind separate adapters. Any AI
    action plan must show its actions and require user approval before writes.
 

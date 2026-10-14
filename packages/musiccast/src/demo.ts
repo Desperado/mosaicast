@@ -1,6 +1,12 @@
 import type { Command, Controller, Snapshot } from './types';
 
 export function demoController(): Controller {
+  const tracks = [
+    { title: 'A slower kind of Sunday', artist: 'The Quiet Hours', album: 'Low tide hours', duration: 218 },
+    { title: 'Light through the window', artist: 'Marrow Coast', album: 'Low tide hours', duration: 246 },
+    { title: 'The blue hour', artist: 'The Quiet Hours', album: 'Evening shapes', duration: 193 },
+  ];
+  let trackIndex = 0;
   let state: Snapshot = {
     model: 'Example listening room', trackUnavailable: false,
     features: {
@@ -13,7 +19,7 @@ export function demoController(): Controller {
       ],
     },
     status: { power: 'on', input: 'deezer', volume: 12, maxVolume: 63, mute: false },
-    track: { title: 'A slower kind of Sunday', artist: 'The Quiet Hours', album: 'Example music', playback: 'pause', elapsed: 42, duration: 218 },
+    track: { ...tracks[trackIndex], playback: 'pause', elapsed: 42 },
   };
   const copy = () => JSON.parse(JSON.stringify(state)) as Snapshot;
   return {
@@ -29,11 +35,15 @@ export function demoController(): Controller {
         case 'volume': status.volume = Math.max(0, Math.min(63, status.volume! + (command.value === 'up' ? 1 : -1))); break;
         case 'mute': status.mute = command.value; break;
         case 'playback':
+          if (command.value === 'previous' || command.value === 'next') {
+            trackIndex = (trackIndex + (command.value === 'next' ? 1 : tracks.length - 1)) % tracks.length;
+            if (state.track) state.track = { ...tracks[trackIndex], playback: state.track.playback, elapsed: 0 };
+          }
           if (state.track) state.track = { ...state.track, playback: command.value === 'pause' ? 'pause' : 'play' };
           break;
       }
       const supported = status.power === 'on' && state.features.sources.some(source => source.id === status.input && source.networkPlayer);
-      state = { ...state, status, track: supported ? state.track || { title: 'Light through the window', artist: 'The Quiet Hours', album: 'Example music', playback: 'stop', elapsed: 0, duration: 218 } : undefined };
+      state = { ...state, status, track: supported ? state.track || { ...tracks[trackIndex], playback: 'stop', elapsed: 0 } : undefined };
       return copy();
     },
   };
