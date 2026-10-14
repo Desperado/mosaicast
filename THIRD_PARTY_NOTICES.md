@@ -14,7 +14,9 @@ bundle and remote font imports without accompanying license notices. That
 archive and runtime are not distributed in this repository. The design intake
 and prompts describe the intended product; they do not grant rights to any
 third-party bundle. Obtain licenses and preserve notices before importing assets.
-The mobile foundation uses platform system fonts and no album-art files.
+The mobile design uses platform system fonts and no album-art files. Mosaic
+artwork, SVG icon geometry, and fictional track names were created for this
+implementation; the supplied runtime, fonts, and media were not imported.
 
 MusicCast, Yamaha, Samsung, The Frame, Deezer, and other service names are
 trademarks of their respective owners. This is an independent project with no

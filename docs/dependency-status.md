@@ -1,5 +1,18 @@
 # Dependency status
 
+## ESLint 10 compatibility
+
+Expo SDK 57's lint configuration includes React and import plugins whose peer
+ranges still stop at ESLint 9. ESLint 10 removes legacy rule-context methods;
+without adaptation, `react/display-name` crashes on `context.getFilename()`.
+The root lint configuration uses ESLint's official `@eslint/compat` helper to
+adapt the imported Expo rules. A regression test verifies that React and import
+rules still report defects and accept a valid TSX component. npm may still warn
+about the upstream peer ranges. Remove the helper when Expo's plugins support
+ESLint 10 directly and the regression test passes without it.
+
+## Security advisories
+
 Checked on 14 October 2026 against the committed npm lockfile. `npm audit`
 reports 28 affected package entries: 18 high and 10 moderate, with no critical
 entries. Many entries share the same underlying advisory through Expo/Metro
