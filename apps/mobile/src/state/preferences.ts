@@ -3,10 +3,11 @@ export interface Preferences {
   appearance: 'system' | 'light' | 'dark';
   language: 'system' | 'en' | 'uk';
   demoStarted: boolean;
+  mode: 'demo' | 'device';
   address: string;
 }
 
-export const defaults: Preferences = { version: 1, appearance: 'system', language: 'system', demoStarted: false, address: '' };
+export const defaults: Preferences = { version: 1, appearance: 'system', language: 'system', demoStarted: false, mode: 'demo', address: '' };
 export const preferencesKey = 'mosaicast.preferences.v1';
 
 export function parsePreferences(raw: string | null): Preferences {
@@ -19,6 +20,7 @@ export function parsePreferences(raw: string | null): Preferences {
     appearance: record.appearance === 'light' || record.appearance === 'dark' ? record.appearance : 'system',
     language: record.language === 'en' || record.language === 'uk' ? record.language : 'system',
     demoStarted: record.demoStarted === true,
+    mode: record.mode === 'device' ? 'device' : 'demo',
     address: typeof record.address === 'string' && record.address.length <= 15 ? record.address : '',
   };
 }

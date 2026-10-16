@@ -4,17 +4,20 @@ An independent, open-source MusicCast controller for iOS and Android, built in
 TypeScript. The aim is a fast, clear listening experience with English and
 Ukrainian, discovered device capabilities, and visible command outcomes.
 
-**Status: mobile design demo, not a replacement app ready for daily use.**
-The mobile app currently runs an isolated demo. It sends no network requests
-or device commands. It has onboarding, Listen, Rooms, Connection, and Settings
-screens with bilingual copy, source selection, power, volume, mute, and transport.
-Two fictional rooms have separate playback state. Appearance and language follow
-the device by default; explicit choices, onboarding completion, and a draft
-private IPv4 address persist locally. The Connection screen saves an address
-without contacting it. Demo playback resets when restarted.
-The shared local MusicCast adapter is implemented and tested with simulated
-responses, but it is not connected to the mobile UI yet. The earlier desktop
-controller's hardware checks do not establish mobile compatibility.
+**Status: early live controller with a separate demo. Not yet a store release.**
+Connect one Yamaha by private IPv4 address to read its main-zone status,
+capabilities and track metadata, and control power, volume, mute, input and
+network/USB playback. Available controls and volume limits come from the device.
+The selected mode and address persist locally; reconnecting only reads state.
+English/Ukrainian and system/light/dark appearance are supported.
+
+Demo mode uses two fictional rooms and never contacts hardware. Switching to
+it disconnects the app session without changing Yamaha playback. Old saved demo
+addresses are not automatically promoted into live connections.
+
+The laptop web preview has been connected to a CD-NT670D to verify status,
+metadata, sources and restoration. Native iOS/Android builds and their permission
+flows remain unverified. A working web preview does not establish native support.
 
 ## Repository layout
 
@@ -39,7 +42,7 @@ npm ci
 npm run dev
 npm run ios       # requires a configured iOS simulator on macOS
 npm run android   # requires a configured Android emulator
-npm run web       # browser preview of the mobile design
+npm run web       # browser preview; live connection also needs the bridge below
 ```
 
 Dependencies are pinned by the root `package-lock.json`. Run installs from the
@@ -58,12 +61,40 @@ bundling; it does not validate an iOS or Android binary.
 The dependency audit currently reports upstream advisories. See
 [dependency status](docs/dependency-status.md) for the findings and release follow-up.
 
+## Connect from the laptop
+
+Yamaha's API does not provide browser CORS headers. Keep both commands running
+in separate terminals from this repository root:
+
+```bash
+npm run bridge
+npm run web --workspace @mosaicast/mobile -- --port 8091
+```
+
+Open `http://localhost:8091`, choose **Connect by IP**, and enter your Yamaha's
+private IPv4 address. The device and laptop must share a reachable local network.
+If the bridge stops, the app shows an actionable error and disables stale controls.
+The bridge listens only on `127.0.0.1:8092`, accepts fixed localhost origins on
+ports 8081, 8091 and 19006, and restricts targets to private IPv4 addresses.
+It is a local development tool; never deploy or expose it on your LAN or internet.
+
+Native builds use the Yamaha API directly and do not need the bridge. Native
+local-network/HTTP settings are included in Expo configuration; they require a
+new native build, and are not applied to an existing Expo Go binary. Before
+claiming mobile compatibility, test local-network access and denied permissions
+on actual iOS/Android builds. Remote power-on needs Network Standby enabled on
+the Yamaha. Selecting an input does not sign into or browse a music service.
+
+Writes are sent once. If a result is uncertain, explicitly refresh status before
+another command. Foreground polling every eight seconds never replays commands.
+Next/previous acknowledgement means accepted, not a confirmed track transition.
+
 ## Implementation order
 
 1. Validate the implemented onboarding, Listen, Rooms, Connection, and Settings
    screens on iOS and Android, including safe areas, keyboards, and accessibility.
-2. Connect the adapter using native local-network permissions, device storage,
-   fresh capability reads, and explicit pending/confirmed/uncertain outcomes.
+2. Validate the native connection and permission flows, hardware commands,
+   offline/resume behavior and concurrent external remote changes.
 3. Add Library, device-aware browsing, artwork, discovery, and multiroom functions.
 4. Add optional companion and AI features behind separate adapters. Any AI
    action plan must show its actions and require user approval before writes.

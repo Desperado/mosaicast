@@ -11,6 +11,9 @@ Reports should describe impact, affected commit, and an offline reproduction.
 No response-time guarantee is made. The maintainer will triage and coordinate
 fixes and disclosure with the reporter.
 
-The future controller operates on a trusted local network; Yamaha's local HTTP
+The controller operates on a trusted local network; Yamaha's local HTTP
 API is not an internet-facing service. Never expose device ports through a
-router. This demo sends no hardware commands and collects no telemetry.
+router. Live mode sends explicitly requested hardware commands; demo mode
+never contacts hardware. The app collects no telemetry. The optional browser
+bridge binds to loopback and only accepts allowlisted localhost origins. Never
+expose it publicly or change its bind address to an external interface.

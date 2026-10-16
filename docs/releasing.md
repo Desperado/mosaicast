@@ -5,7 +5,8 @@ private; this repository's first milestone is a working native controller.
 
 Before a mobile release:
 
-- Complete the native connection layer and permissions/transport configuration.
+- Validate the native connection layer and permissions/transport configuration
+  in new iOS/Android binaries, including local-network denial.
 - Run clean-install CI, lint, typechecks, tests, and the production export.
 - Build and test iOS and Android binaries; a web preview is insufficient.
 - Record device model/firmware and verify power, source, volume, mute, transport,
