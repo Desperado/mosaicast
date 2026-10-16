@@ -31,7 +31,7 @@ signing material must never be committed.
 
 The initial Android package and iOS bundle identifier are both
 `io.github.desperado.mosaicast`. Confirm their availability before provisioning
-or store registration. Version `0.1.0` and build number `1` are local; increment
+or store registration. Version `0.1.0` and build number `2` are local; increment
 build numbers before uploading another binary to a store.
 
 ## Android phone or emulator
@@ -76,6 +76,12 @@ cannot be installed on an iPhone. LAN access still needs real-device testing.
 ## Before calling the preview usable
 
 - Check English/Ukrainian, light/dark mode, keyboards, and safe areas.
+- Enter `192,168,1,40` and paste an address with outer spaces. Check that commas
+  become dots. Missing separators must show validation, never guessed octets.
+- Search on Wi-Fi with local-network access allowed and denied. Check selection,
+  empty results, cancellation, leaving the screen, and backgrounding. The first
+  iOS permission prompt must not cancel the search just by making the app inactive.
+  Search covers only the displayed `/24` range; use manual IP for other ranges.
 - Connect by a private IPv4 address. Accept the local-network prompt on iOS;
   also test denial and enabling access again in system settings.
 - Check model, sources, playback metadata, power, mute, and volume. Power-on
