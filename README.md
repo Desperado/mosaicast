@@ -5,7 +5,7 @@ TypeScript. The aim is a fast, clear listening experience with English and
 Ukrainian, discovered device capabilities, and visible command outcomes.
 
 **Status: early live controller with a separate demo. Not yet a store release.**
-Connect one Yamaha by private IPv4 address to read its main-zone status,
+Find a Yamaha on the phone's local network, or connect by private IPv4 to read its main-zone status,
 capabilities and track metadata, and control power, volume, mute, input and
 network/USB playback. Available controls and volume limits come from the device.
 The selected mode and address persist locally; reconnecting only reads state.
@@ -40,8 +40,8 @@ Use Node 24 LTS (`nvm use`) and npm 10 or newer. No account or API key is needed
 ```bash
 npm ci
 npm run dev
-npm run ios       # requires a configured iOS simulator on macOS
-npm run android   # requires a configured Android emulator
+npm run ios       # build/run locally; requires full Xcode and an iOS simulator
+npm run android   # build/run locally; requires Android Studio/SDK and a device
 npm run web       # browser preview; live connection also needs the bridge below
 ```
 
@@ -52,11 +52,12 @@ Router and Metro follow [Expo's monorepo setup](https://docs.expo.dev/guides/mon
 
 ```bash
 npm run check          # lint, all workspace typechecks, adapter/i18n/preferences tests
-npm run bundle:check   # Expo web production export, including shared packages
+npm run bundle:check   # Expo iOS, Android, and web production bundles
 ```
 
-CI runs both checks on pull requests and pushes to main. A web export checks
-bundling; it does not validate an iOS or Android binary.
+CI runs both checks on pull requests and pushes to main. The export checks
+iOS, Android, and web bundles; it does not compile or install native binaries.
+See [native builds](docs/native-builds.md) to produce an Android APK or iOS preview.
 
 The dependency audit currently reports upstream advisories. See
 [dependency status](docs/dependency-status.md) for the findings and release follow-up.
@@ -95,7 +96,7 @@ Next/previous acknowledgement means accepted, not a confirmed track transition.
    screens on iOS and Android, including safe areas, keyboards, and accessibility.
 2. Validate the native connection and permission flows, hardware commands,
    offline/resume behavior and concurrent external remote changes.
-3. Add Library, device-aware browsing, artwork, discovery, and multiroom functions.
+3. Add Library, device-aware browsing, artwork, broader discovery, and multiroom functions.
 4. Add optional companion and AI features behind separate adapters. Any AI
    action plan must show its actions and require user approval before writes.
 
@@ -103,6 +104,25 @@ See [architecture](docs/architecture.md), [design intake](docs/design/design-int
 and [release checklist](docs/releasing.md). Real-device testing is required
 before claiming model support. Music services vary by model, firmware, region,
 and account; listing an input does not prove its catalog can be browsed.
+
+## Find a Yamaha on your phone
+
+On the Connection screen, tap **Search local network**, allow local-network
+access, then select a result and tap **Connect by IP**. Search runs only when
+requested and reads device information; it does not power on or change devices.
+Cancel, leaving the screen, or moving the app to the background stops it.
+
+This first search checks addresses `.1`–`.254` sharing the phone's first three
+IPv4 numbers (a `/24` range, displayed on screen), with at most 12 requests at
+once and a 1.2-second timeout per address. It normally finishes within 30 seconds.
+This is not subnet-mask detection or SSDP: larger subnets, separate VLANs, VPNs,
+guest-network isolation and Yamaha devices without Network Standby can prevent
+discovery. Enter the IP manually when needed. Manual entry accepts commas as
+dots and trims outer whitespace; missing separators are never guessed.
+
+Search is native iOS/Android only. The browser preview still uses manual IP and
+the local bridge. Search results are not a saved device registry or a claim of
+model support; the app reads capabilities when you explicitly connect.
 
 ## Open source
 

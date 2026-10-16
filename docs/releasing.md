@@ -7,7 +7,7 @@ Before a mobile release:
 
 - Validate the native connection layer and permissions/transport configuration
   in new iOS/Android binaries, including local-network denial.
-- Run clean-install CI, lint, typechecks, tests, and the production export.
+- Run clean-install CI, lint, typechecks, tests, and the production bundles for iOS, Android, and web.
 - Build and test iOS and Android binaries; a web preview is insufficient.
 - Record device model/firmware and verify power, source, volume, mute, transport,
   stale/offline/denied-access behavior and uncertain command outcomes.
@@ -18,9 +18,14 @@ Before a mobile release:
   lockfile and verify compatible fixes or documented mitigations.
 - Review privacy disclosures against actual data flows. Do not claim zero
   collection if optional integrations send data to external providers.
-- Choose final bundle identifiers, icons, versioning, build profiles and store
-  accounts. Use protected CI secrets for signing; never commit credentials.
+- Confirm the initial `io.github.desperado.mosaicast` identifiers, icons,
+  version/build numbers, and store accounts. Preview profiles and instructions
+  are in [native builds](native-builds.md). Keep signing credentials in EAS or
+  protected local storage; never commit them.
 - Publish release notes that separate tested features from planned features.
 
-The current scaffold has no signing configuration, EAS project, store listing,
-AI integration, or compatibility matrix. Add those only with verified details.
+Preview build profiles are configured and linked to `@quality-max/mosaicast`.
+Platform signing must be set up before physical-device builds; no signing
+credentials are stored in this repo.
+There is no automated store submission, store listing, AI integration, or
+compatibility matrix. Add those only with verified details.
