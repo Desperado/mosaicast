@@ -13,12 +13,16 @@
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         }
-      }
+      },
+      "bundleIdentifier": "io.github.desperado.mosaicast",
+      "buildNumber": "1"
     },
     "android": {
       "permissions": [
         "android.permission.INTERNET"
-      ]
+      ],
+      "package": "io.github.desperado.mosaicast",
+      "versionCode": 1
     },
     "web": {
       "bundler": "metro",
@@ -28,6 +32,13 @@
       "expo-router",
       "expo-localization",
       "./plugins/local-network.cjs"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2e6e6527-2710-42d5-bee6-01e4dc09f1fe"
+      }
+    },
+    "owner": "quality-max"
   }
 }

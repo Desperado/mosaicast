@@ -40,8 +40,8 @@ Use Node 24 LTS (`nvm use`) and npm 10 or newer. No account or API key is needed
 ```bash
 npm ci
 npm run dev
-npm run ios       # requires a configured iOS simulator on macOS
-npm run android   # requires a configured Android emulator
+npm run ios       # build/run locally; requires full Xcode and an iOS simulator
+npm run android   # build/run locally; requires Android Studio/SDK and a device
 npm run web       # browser preview; live connection also needs the bridge below
 ```
 
@@ -52,11 +52,12 @@ Router and Metro follow [Expo's monorepo setup](https://docs.expo.dev/guides/mon
 
 ```bash
 npm run check          # lint, all workspace typechecks, adapter/i18n/preferences tests
-npm run bundle:check   # Expo web production export, including shared packages
+npm run bundle:check   # Expo iOS, Android, and web production bundles
 ```
 
-CI runs both checks on pull requests and pushes to main. A web export checks
-bundling; it does not validate an iOS or Android binary.
+CI runs both checks on pull requests and pushes to main. The export checks
+iOS, Android, and web bundles; it does not compile or install native binaries.
+See [native builds](docs/native-builds.md) to produce an Android APK or iOS preview.
 
 The dependency audit currently reports upstream advisories. See
 [dependency status](docs/dependency-status.md) for the findings and release follow-up.
