@@ -9,7 +9,7 @@ on npm. Metro consumes their TypeScript source; adapter tests compile to ignored
 ## Boundaries
 
 - `apps/mobile` owns navigation, presentation, native permissions and lifecycle.
-  It selects an isolated demo or one manually connected device session.
+  It selects an isolated demo or one explicitly connected device session.
 - `packages/musiccast` owns HTTP, parsing, device capabilities and commands.
   It has no Expo or React dependencies. Tests inject a fetch implementation;
   they never scan a network or contact hardware.
@@ -35,7 +35,8 @@ unsupported system languages fall back to English. Writes are queued in order,
 including after an earlier failure, and failure is shown with a retry action.
 Malformed records produce a visible load error and session defaults.
 
-The Connection screen validates an address, reads model/capabilities/status,
+The Connection screen normalizes locale commas and outer whitespace, validates
+an address, reads model/capabilities/status,
 then saves the mode/address only after connecting. A saved device reconnects on
 launch with reads only. A saved address without an explicit device mode remains
 in demo mode. Switching to demo invalidates the session and sends no commands.
@@ -49,7 +50,7 @@ accepted and uncertain outcomes are distinct. No raw error is shown as UI copy.
 
 ## Local device adapter
 
-The adapter addresses a manually supplied private IPv4 host over Yamaha's local
+The adapter addresses a selected or manually supplied private IPv4 host over Yamaha's local
 HTTP API. It currently supports the main zone, capabilities/status, network/USB
 track metadata, explicit on/standby, source switching with autoplay disabled,
 relative volume steps, mute, and network/USB transport. Artwork accepts only
@@ -58,9 +59,23 @@ parameters. Read requests time out after five seconds; redirects are rejected.
 
 The private-address check is deliberately conservative: hostnames, IPv6,
 loopback, public addresses, and addresses ending in .0/.255 are unsupported.
-There is no automatic discovery, catalog browser, authentication flow, event
+There is no catalog browser, authentication flow, event
 listener, persistent capability caching, room grouping, absolute-volume slider, or persisted device registry yet.
 Connectivity labels describe advertised support, not enabled settings.
+
+On-demand native discovery uses Expo Network to obtain the phone's local IPv4
+on Wi-Fi or Ethernet. The pure adapter scans only its `/24` range, skipping the
+phone, with 12 workers and 1.2-second abortable probes to the fixed
+`system/getDeviceInfo` endpoint. Non-success, malformed, redirected or oversized
+responses are ignored; only successful Yamaha-shaped responses with a model name
+appear. Results are not persisted or automatically connected. Screen blur,
+backgrounding, manual entry, selecting a result and demo mode cancel outstanding
+probes and discard late results. The browser module never requests a public IP.
+
+This bounded HTTP fallback avoids a multicast entitlement, but does not discover
+the actual subnet mask, search other ranges or replace SSDP. Permission denial
+and unreachable devices can both produce an empty result, with manual IP as the
+fallback. Physical-phone discovery and denied-permission flows need validation.
 
 Commands are serialized per client. A write is sent once; only observation reads
 are retried. Power/input/mute/volume require the requested state to be observed.
