@@ -13,7 +13,7 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=22.13.0",
+    "node": "^22.13.0 || >=24.0.0",
     "npm": ">=10"
   },
   "scripts": {
@@ -29,8 +29,9 @@
     "bridge": "npm run build --workspace @mosaicast/musiccast && node tools/bridge.cjs"
   },
   "devDependencies": {
-    "typescript": "~6.0.3",
-    "eslint": "^9.39.5",
-    "eslint-config-expo": "~57.0.2"
+    "@eslint/compat": "^2.1.1",
+    "eslint": "^10.12.0",
+    "eslint-config-expo": "~57.0.2",
+    "typescript": "~6.0.3"
   }
 }

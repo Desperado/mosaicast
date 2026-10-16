@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState, Platform, useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocales } from 'expo-localization';
@@ -19,6 +19,8 @@ function useAppState() {
   const preferencesRef = useRef(preferences);
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState<'loadError' | 'saveError'>();
+  const loadRequest = useRef(0);
+  const mounted = useRef(false);
   const [activeRoom, setActiveRoom] = useState<Room>('livingRoom');
   const [controllers] = useState(() => ({ livingRoom: demoController(), studio: demoController() }));
   const [snapshots, setSnapshots] = useState<Partial<Record<DemoRoom, Snapshot>>>({});
@@ -30,16 +32,45 @@ function useAppState() {
   const [writer] = useState(() => preferenceWriter(value => AsyncStorage.setItem(preferencesKey, value)));
   const latestSave = useRef(0);
 
+  const readPreferences = useCallback(() => AsyncStorage.getItem(preferencesKey).then(parsePreferences), []);
+  const retryLoadPreferences = useCallback(() => {
+    setReady(false);
+    const request = ++loadRequest.current;
+    return readPreferences().then(value => {
+      if (mounted.current && request === loadRequest.current) {
+        preferencesRef.current = value;
+        setPreferences(value);
+        setStorageError(undefined);
+      }
+      return true;
+    }).catch(() => {
+      if (mounted.current && request === loadRequest.current) setStorageError('loadError');
+      return false;
+    }).finally(() => {
+      if (mounted.current && request === loadRequest.current) setReady(true);
+    });
+  }, [readPreferences]);
+
   useEffect(() => {
     let active = true;
-    AsyncStorage.getItem(preferencesKey).then(parsePreferences).then(value => {
-      if (active) { preferencesRef.current = value; setPreferences(value); }
-    }).catch(() => { if (active) setStorageError('loadError'); }).finally(() => { if (active) setReady(true); });
+    mounted.current = true;
+    const request = ++loadRequest.current;
+    readPreferences().then(value => {
+      if (active && request === loadRequest.current) {
+        preferencesRef.current = value;
+        setPreferences(value);
+        setStorageError(undefined);
+      }
+    }).catch(() => {
+      if (active && request === loadRequest.current) setStorageError('loadError');
+    }).finally(() => {
+      if (active && request === loadRequest.current) setReady(true);
+    });
     Promise.all(demoRooms.map(async room => [room, await controllers[room].read()] as const))
       .then(entries => { if (active) setSnapshots(Object.fromEntries(entries)); })
       .catch(() => { if (active) setCommandError('livingRoom'); });
-    return () => { active = false; };
-  }, [controllers]);
+    return () => { active = false; mounted.current = false; };
+  }, [controllers, readPreferences]);
 
   useEffect(() => {
     if (!ready) return;
@@ -63,8 +94,24 @@ function useAppState() {
   }, [session]);
 
   async function savePreferences(patch: Partial<Omit<Preferences, 'version'>>): Promise<boolean> {
-    if (!ready) return false;
+    if (!ready || storageError === 'loadError') return false;
     const next = { ...preferencesRef.current, ...patch };
+    preferencesRef.current = next;
+    setPreferences(next);
+    const request = ++latestSave.current;
+    try {
+      await writer(next);
+      if (request === latestSave.current) setStorageError(undefined);
+      return true;
+    } catch {
+      if (request === latestSave.current) setStorageError('saveError');
+      return false;
+    }
+  }
+
+  async function resetPreferences(): Promise<boolean> {
+    if (!ready || storageError !== 'loadError') return false;
+    const next = { ...defaults };
     preferencesRef.current = next;
     setPreferences(next);
     const request = ++latestSave.current;
@@ -110,7 +157,7 @@ function useAppState() {
   const locale = resolveLanguage(preferences.language, locales[0]?.languageCode);
   const theme = resolveAppearance(preferences.appearance, systemTheme);
   const real = activeRoom === 'device';
-  return { ready, preferences, savePreferences, storageError, activeRoom, setActiveRoom, snapshots,
+  return { ready, preferences, savePreferences, retryLoadPreferences, resetPreferences, storageError, activeRoom, setActiveRoom, snapshots,
     snapshot: real ? deviceState.snapshot : snapshots[activeRoom], busy: real ? deviceState.busy : busy[activeRoom] ?? false,
     commandError: real ? deviceState.error : commandError === activeRoom ? 'error' as const : undefined,
     deviceState, real, connect, startDemo, refresh: () => session.refresh(),
