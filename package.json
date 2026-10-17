@@ -37,6 +37,6 @@
     "esbuild": "0.28.2",
     "eslint": "^10.12.0",
     "eslint-config-expo": "~57.0.2",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.2"
   }
 }
