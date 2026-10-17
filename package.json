@@ -21,6 +21,7 @@
     "ios": "npm run ios --workspace @mosaicast/mobile",
     "android": "npm run android --workspace @mosaicast/mobile",
     "web": "npm run web --workspace @mosaicast/mobile",
+    "prelint": "npm run build --workspace @mosaicast/musiccast",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present && node --test tools/*.test.cjs",

@@ -5,6 +5,9 @@ There is one React/React Native dependency set; no task runner or cloud backend 
 needed. A loopback bridge enables the browser development preview. Packages are private to the workspace, not released
 on npm. Metro consumes their TypeScript source; adapter tests compile to ignored
 `dist/` directories and run with Node's built-in test runner.
+Root linting first builds the shared MusicCast package, because the TV's Node
+adapter imports that compiled entry point. A clean checkout needs no earlier
+test or build run before `npm run check`.
 
 ## Boundaries
 
