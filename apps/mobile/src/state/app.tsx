@@ -8,6 +8,7 @@ import { BrowseError, demoController, DeviceSession, type BrowseAction, type Dev
 import { PhoneCompanion, type PeerStatus } from './phone-companion';
 import { deviceController } from './device-controller';
 import { useHardwareVolume } from './hardware-volume';
+import { lifecycleChange } from './lifecycle';
 import { defaults, parsePreferences, preferenceWriter, preferencesKey, resolveAppearance, resolveLanguage, type Preferences } from './preferences';
 
 export const demoRooms = ['livingRoom', 'studio'] as const;
@@ -97,8 +98,9 @@ function useAppState() {
   useEffect(() => {
     let foreground = AppState.currentState !== 'background' && AppState.currentState !== 'inactive';
     const subscription = AppState.addEventListener('change', state => {
-      foreground = state === 'active';
-      session.setActive(foreground);
+      const change = lifecycleChange(state);
+      foreground = change.foreground;
+      if (change.active !== undefined) session.setActive(change.active);
       if (foreground) void session.refresh(false);
     });
     const timer = setInterval(() => {
@@ -171,7 +173,7 @@ function useAppState() {
       setActiveRoom('device');
       await savePreferences({ address: host, mode: 'device', demoStarted: true, connection: 'companion' });
     }
-    return success;
+    return success && session.state.host === host && session.state.phase === 'connected' && preferencesRef.current.mode === 'device';
   }
 
   const loadBrowse = useCallback(async (input: string, index = 0, takeover = false) => {

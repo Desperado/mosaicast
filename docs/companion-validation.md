@@ -56,7 +56,9 @@ behavior remains part of the hardware gate. The dependency audit still reports
   observed state, including volume near both limits.
 - Close/terminate each app in turn. Verify the TV's 60-second recovery and Refresh
   after phone loss, and the phone's explicit **TV app is closed — take control**
-  followed by Refresh. Test background/resume, phone return, authority expiry and
+  followed by Refresh. Open Control Center and the app switcher on the iPhone and
+  verify the TV stays connected. Test background/resume (also with a Refresh
+  pending), phone return, authority expiry and
   network loss after dispatch with no replay or automatic playback changes.
 - Hold a slow browse/search on one app while navigating cached Now Playing,
   dialogs and themes on the other. Test menu takeover, old selections and external

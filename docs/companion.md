@@ -38,6 +38,7 @@ Only one iPhone and one TV per pairing are supported.
 | --- | --- |
 | Both open | TV finishes its current local operation, then yields to iPhone. Refresh is required after a handoff. |
 | iPhone closed or backgrounded | Its listener stops. TV waits 60 seconds after detecting loss, reads Yamaha, and requires Refresh before writes. |
+| iPhone briefly inactive | Control Center, the app switcher, calls and system prompts keep the listener running. Returning from the background restarts it immediately, even while a Refresh is pending. |
 | TV closed | A previously paired phone waits for TV acknowledgement. Choose **TV app is closed — take control**, then Refresh. |
 | iPhone reopened | TV reconnects, drains its local operation and yields. Both apps refresh the actual receiver state. |
 | Neither open | Yamaha continues playback; no coordinator runs. |

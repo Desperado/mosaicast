@@ -72,7 +72,13 @@ export class PhoneCompanion implements Controller {
   cancelPairing() { this.service?.cancelPairing(); this.status(); }
   takeControl() { this.service?.takeControl(); this.status(); }
   close() { this.closed = true; this.stop(); this.notify({}); }
-  setActive(active: boolean) { this.active = active; if (!active) this.stop(); }
+  // Restart the listener on return even while a Refresh is pending, so the TV
+  // can reconnect. Device reads and writes still wait for the user.
+  setActive(active: boolean) {
+    this.active = active;
+    if (!active) this.stop();
+    else if (!this.closed) void this.ensure().catch(() => {});
+  }
   async read() { return (await this.ensure()).read(); }
   async reconcile() { return (await this.ensure()).reconcile(); }
   async execute(command: Parameters<Controller['execute']>[0]) { return (await this.ensure()).execute(command); }
