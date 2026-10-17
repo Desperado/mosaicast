@@ -1,3 +1,5 @@
+> Історичний бриф початкового дизайну. Актуальні можливості й пріоритети власника — в [оновленому handoff від 17 жовтня](current-design-handoff.md).
+
 # Промпт для Claude Design: Mosaicast — українська версія
 
 Скопіюй текст після розділювача в Claude Design. За бажанням додай `musiccast-user-feedback.md`, README проєкту Home Entertainment, наявні знімки екрана та `src/musiccast/types.ts`. Використовуй вигадану музику та демонстраційні зображення. Англійська версія: `claude-design-prompt.md`.

@@ -19,6 +19,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run build --workspace @mosaicast/frame
       - run: npm run bundle:check
         env:
           CI: '1'
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:layout

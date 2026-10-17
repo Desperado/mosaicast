@@ -4,8 +4,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocales } from 'expo-localization';
 import { themes } from '@mosaicast/design';
 import { translate, type TranslationKey } from '@mosaicast/i18n';
-import { demoController, DeviceSession, type DeviceState, type Command, type Snapshot } from '@mosaicast/musiccast';
+import { BrowseError, demoController, DeviceSession, type BrowseAction, type DeviceState, type Command, type Snapshot } from '@mosaicast/musiccast';
+import { PhoneCompanion, type PeerStatus } from './phone-companion';
 import { deviceController } from './device-controller';
+import { useHardwareVolume } from './hardware-volume';
+import { lifecycleChange } from './lifecycle';
 import { defaults, parsePreferences, preferenceWriter, preferencesKey, resolveAppearance, resolveLanguage, type Preferences } from './preferences';
 
 export const demoRooms = ['livingRoom', 'studio'] as const;
@@ -24,9 +27,19 @@ function useAppState() {
   const [activeRoom, setActiveRoom] = useState<Room>('livingRoom');
   const [controllers] = useState(() => ({ livingRoom: demoController(), studio: demoController() }));
   const [snapshots, setSnapshots] = useState<Partial<Record<DemoRoom, Snapshot>>>({});
+  const [demoBrowse, setDemoBrowse] = useState<Partial<Record<DemoRoom, Pick<DeviceState, 'browse' | 'browseError' | 'browseAccepted'>>>>({});
   const [deviceState, setDeviceState] = useState<DeviceState>({ phase: 'disconnected', busy: false, needsRefresh: false });
-  const [session] = useState(() => new DeviceSession(deviceController, setDeviceState));
+  const companionMode = useRef(false);
+  const phoneCompanion = useRef<PhoneCompanion | undefined>(undefined);
+  const [peerStatus, setPeerStatus] = useState<PeerStatus>({});
+  const [session] = useState(() => new DeviceSession(host => {
+    if (!companionMode.current) return deviceController(host);
+    const controller = new PhoneCompanion(host, setPeerStatus);
+    phoneCompanion.current = controller;
+    return controller;
+  }, setDeviceState));
   const [busy, setBusy] = useState<Partial<Record<Room, boolean>>>({});
+  const [pendingCommands, setPendingCommands] = useState<Partial<Record<DemoRoom, Command>>>({});
   const commandLocks = useRef(new Set<Room>());
   const [commandError, setCommandError] = useState<Room>();
   const [writer] = useState(() => preferenceWriter(value => AsyncStorage.setItem(preferencesKey, value)));
@@ -77,6 +90,7 @@ function useAppState() {
     const restored = preferencesRef.current;
     if (restored.mode === 'device') {
       setActiveRoom('device');
+      companionMode.current = restored.connection === 'companion';
       if (restored.address) void session.connect(restored.address);
     }
   }, [ready, session]);
@@ -84,11 +98,13 @@ function useAppState() {
   useEffect(() => {
     let foreground = AppState.currentState !== 'background' && AppState.currentState !== 'inactive';
     const subscription = AppState.addEventListener('change', state => {
-      foreground = state === 'active';
+      const change = lifecycleChange(state);
+      foreground = change.foreground;
+      if (change.active !== undefined) session.setActive(change.active);
       if (foreground) void session.refresh(false);
     });
     const timer = setInterval(() => {
-      if (foreground && (Platform.OS !== 'web' || !document.hidden)) void session.refresh(false);
+      if (!companionMode.current && foreground && (Platform.OS !== 'web' || !document.hidden)) void session.refresh(false);
     }, 8000);
     return () => { clearInterval(timer); subscription.remove(); session.disconnect(); };
   }, [session]);
@@ -130,22 +146,64 @@ function useAppState() {
     const room = activeRoom;
     if (commandLocks.current.has(room)) return;
     commandLocks.current.add(room);
+    setPendingCommands(value => ({ ...value, [room]: command }));
     setBusy(value => ({ ...value, [room]: true }));
     setCommandError(undefined);
     try {
       const snapshot = await controllers[room].execute(command);
       setSnapshots(value => ({ ...value, [room]: snapshot }));
     } catch { setCommandError(room); }
-    finally { commandLocks.current.delete(room); setBusy(value => ({ ...value, [room]: false })); }
+    finally { commandLocks.current.delete(room); setBusy(value => ({ ...value, [room]: false })); setPendingCommands(value => ({ ...value, [room]: undefined })); }
   }
 
   async function connect(host: string) {
+    companionMode.current = false;
     const success = await session.connect(host);
     if (success) {
       setActiveRoom('device');
-      await savePreferences({ address: host, mode: 'device', demoStarted: true });
+      await savePreferences({ address: host, mode: 'device', demoStarted: true, connection: 'direct' });
     }
     return success && session.state.host === host && session.state.phase === 'connected' && preferencesRef.current.mode === 'device';
+  }
+
+  async function connectCompanion(host: string) {
+    companionMode.current = true;
+    const success = await session.connect(host);
+    if (success) {
+      setActiveRoom('device');
+      await savePreferences({ address: host, mode: 'device', demoStarted: true, connection: 'companion' });
+    }
+    return success && session.state.host === host && session.state.phase === 'connected' && preferencesRef.current.mode === 'device';
+  }
+
+  const loadBrowse = useCallback(async (input: string, index = 0, takeover = false) => {
+    if (activeRoom === 'device') { await session.loadBrowse(input, index, takeover); return; }
+    const room = activeRoom;
+    if (commandLocks.current.has(room)) return;
+    commandLocks.current.add(room);
+    setBusy(value => ({ ...value, [room]: true }));
+    setDemoBrowse(value => ({ ...value, [room]: { browse: value[room]?.browse } }));
+    try {
+      const browse = await controllers[room].browse(input, index);
+      setDemoBrowse(value => ({ ...value, [room]: { browse } }));
+    } catch (error) {
+      setDemoBrowse(value => ({ ...value, [room]: { browseError: error instanceof BrowseError ? error.code : 'browseReadError' } }));
+    } finally { commandLocks.current.delete(room); setBusy(value => ({ ...value, [room]: false })); }
+  }, [activeRoom, controllers, session]);
+
+  async function browseAction(action: BrowseAction) {
+    if (activeRoom === 'device') { await session.browseAction(action); return; }
+    const room = activeRoom;
+    if (commandLocks.current.has(room)) return;
+    commandLocks.current.add(room);
+    setBusy(value => ({ ...value, [room]: true }));
+    try {
+      const result = await controllers[room].browseAction(action);
+      setDemoBrowse(value => ({ ...value, [room]: { browse: result.page, browseAccepted: action.type === 'play' } }));
+      if (result.snapshot) setSnapshots(value => ({ ...value, [room]: result.snapshot }));
+    } catch (error) {
+      setDemoBrowse(value => ({ ...value, [room]: { browseError: error instanceof BrowseError ? error.code : 'browseReadError' } }));
+    } finally { commandLocks.current.delete(room); setBusy(value => ({ ...value, [room]: false })); }
   }
 
   function startDemo() {
@@ -157,10 +215,16 @@ function useAppState() {
   const locale = resolveLanguage(preferences.language, locales[0]?.languageCode);
   const theme = resolveAppearance(preferences.appearance, systemTheme);
   const real = activeRoom === 'device';
+  const hardwareVolumeUnavailable = useHardwareVolume(real && deviceState.phase === 'connected' && !deviceState.needsRefresh &&
+    deviceState.snapshot?.status.power === 'on' && typeof deviceState.snapshot.status.volume === 'number' && !!deviceState.snapshot?.features.volumeRange &&
+    deviceState.snapshot.features.controls.includes('volume'), session);
   return { ready, preferences, savePreferences, retryLoadPreferences, resetPreferences, storageError, activeRoom, setActiveRoom, snapshots,
     snapshot: real ? deviceState.snapshot : snapshots[activeRoom], busy: real ? deviceState.busy : busy[activeRoom] ?? false,
+    pendingCommand: real ? deviceState.pendingCommand : pendingCommands[activeRoom],
+    refreshing: real && !!deviceState.refreshing,
     commandError: real ? deviceState.error : commandError === activeRoom ? 'error' as const : undefined,
-    deviceState, real, connect, startDemo, refresh: () => session.refresh(),
+    deviceState, real, connect, connectCompanion, peerStatus, approvePeer: () => phoneCompanion.current?.approve(), cancelPeer: () => phoneCompanion.current?.cancelPairing(), takePeerControl: () => phoneCompanion.current?.takeControl(), startDemo, hardwareVolumeUnavailable, refresh: () => session.refresh(),
+    browseState: real ? deviceState : demoBrowse[activeRoom] ?? {}, loadBrowse, browseAction,
     controlsDisabled: real && (deviceState.phase !== 'connected' || deviceState.needsRefresh),
     execute, locale, theme, colors: themes[theme], t: (key: TranslationKey) => translate(locale, key) };
 }

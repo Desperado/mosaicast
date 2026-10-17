@@ -1,3 +1,4 @@
+import { parseTunerFeatures } from './tuner';
 import type { Features, Status, Track } from './types';
 
 export function privateIPv4(host: string): boolean {
@@ -25,13 +26,13 @@ export function parseFeatures(data: Record<string, unknown>): Features {
   const inputs = strings(zone.input_list);
   const sources = (Array.isArray(system.input_list) ? system.input_list : []).map(record)
     .filter(item => typeof item.id === 'string' && /^[a-z][a-z0-9_]{0,47}$/.test(item.id) && inputs.includes(item.id))
-    .map(item => ({ id: item.id as string, name: sourceName(item.id as string), networkPlayer: item.play_info_type === 'netusb' }));
+    .map(item => ({ id: item.id as string, name: sourceName(item.id as string), networkPlayer: item.play_info_type === 'netusb', tuner: item.play_info_type === 'tuner' }));
   if (!sources.length) throw new Error('This Yamaha does not advertise supported inputs.');
   const range = Array.isArray(zone.range_step) ? zone.range_step.map(record).find(item => item.id === 'volume') : undefined;
   const min = finite(range?.min), max = finite(range?.max), step = finite(range?.step);
   const labels: Record<string, string> = { wired_lan: 'Ethernet', wireless_lan: 'Wi-Fi', wireless_direct: 'Wireless Direct', network_standby: 'Network standby', airplay: 'AirPlay', bluetooth_tx_setting: 'Bluetooth output' };
   return {
-    controls: strings(zone.func_list), sources,
+    controls: strings(zone.func_list), sources, tuner: parseTunerFeatures(data.tuner),
     connectivity: strings(system.func_list).filter(id => labels[id]).map(id => labels[id]),
     volumeRange: min !== undefined && max !== undefined && step !== undefined && min < max && step > 0 ? { min, max, step } : undefined,
   };
