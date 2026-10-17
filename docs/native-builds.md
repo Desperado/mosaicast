@@ -4,9 +4,9 @@ The first target is a standalone controller installed on a phone. These profiles
 bundle the app, so they do not need Metro, Expo Go, or the browser bridge at
 runtime. The phone and Yamaha must be on the same reachable home network.
 
-Current direct-install iPhone preview: [0.1.0 (6)](https://expo.dev/accounts/quality-max/projects/mosaicast/builds/762b096a-a10b-4544-ad90-4ad8f6dc51be),
+Current direct-install iPhone preview: [Mosaicast Dev 0.1.0 (12)](https://expo.dev/accounts/quality-max/projects/mosaicast/builds/d9daffcf-f2c4-48d8-8ab5-b397b87db96d),
 completed on 17 October 2026. Open that page on the registered iPhone to install.
-Compilation passed; the physical-device acceptance checks below remain to be run.
+The build completed successfully from commit `bb7372b`. It includes camera-based TV QR pairing and verified secure-store persistence. The physical-device acceptance checks below remain to be run.
 
 Run `npm ci`, `npm run check`, and `npm run bundle:check` from the repository
 root. Bundle checks cover iOS, Android, and web JavaScript and assets. They do
@@ -138,6 +138,9 @@ cannot be installed on an iPhone. LAN access still needs real-device testing.
   Adjust headphone volume on the headphones and confirm the app labels its
   controls as speaker volume. Disconnect an old entry, remove it from the app,
   relaunch, then restore it. Removal must not send an unpair command to Yamaha.
+- With the updated Frame Music TV app, scan its QR from Connect phone + TV.
+  Check denied camera permission, expired codes, failed secure-store writes,
+  explicit retry, and restarting both apps without another scan.
 - Background and resume the app; check that state refreshes and no command is
   replayed. Relaunch and verify saved device mode, language, and appearance.
 - Switch to demo and verify it sends no requests to the Yamaha.
@@ -164,5 +167,5 @@ the unsupported-native-build message for peer setup.
 
 Production JavaScript export is not a native compilation check. Full Xcode, a
 signed iPhone build, a signed Tizen package and simultaneous hardware testing are
-required before release. No signing, build submission or installation was performed
-for this integration. See [peer validation](companion-validation.md).
+required before release. Mosaicast Dev build 12 has completed on EAS; TV signing,
+installation and simultaneous hardware validation have not been performed. See [peer validation](companion-validation.md).
