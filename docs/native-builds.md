@@ -45,7 +45,7 @@ its own provisioning profile; EAS can reuse the team's distribution certificate.
 `app.config.js` selects `APP_VARIANT=development` by default. The `production`
 EAS profile explicitly sets `APP_VARIANT=production`, preserving the official
 `io.github.desperado.mosaicast` identifiers and `mosaicast` URL scheme.
-Version `0.1.0`, iOS build number `12`, and Android version code `5` are local;
+Version `0.1.0`, iOS build number `13`, and Android version code `5` are local;
 increment build numbers before uploading another binary to a store.
 
 When switching variants after a local native build, regenerate the ignored
@@ -84,6 +84,28 @@ This profile does not upload to TestFlight or publish to the App Store.
 For TestFlight, use the separate store-signing `production` profile and follow
 the [TestFlight preparation notes](testflight.md). A direct-install preview
 cannot be reused as a TestFlight upload.
+
+## Local iPhone builds
+
+Mosaicast Dev `0.1.0 (13)` was built locally on 17 October 2026 from commit
+`91c79d1`. Native compilation and code-signature verification passed. This IPA
+contains the same QR pairing and persistence changes as cloud build 12. Physical
+iPhone/TV acceptance checks remain to be run.
+
+A local EAS build needs full Xcode, CocoaPods, and Fastlane. It uses the same
+`preview` profile and existing EAS-managed signing credentials, without a cloud
+build slot:
+
+```sh
+# Run from apps/mobile.
+npx eas-cli@latest build --platform ios --profile preview --local --output /tmp/Mosaicast-Dev.ipa
+```
+
+If Xcode is outside the selected developer directory, set `DEVELOPER_DIR` to
+that app's `Contents/Developer` directory for this command. This does not change
+the Mac's system-wide Xcode selection. The signed IPA can be installed on a
+registered iPhone using a Mac; local builds do not create an Expo install page.
+Do not retain or commit temporary signing credentials or raw build job output.
 
 ## iOS Simulator
 
@@ -167,5 +189,6 @@ the unsupported-native-build message for peer setup.
 
 Production JavaScript export is not a native compilation check. Full Xcode, a
 signed iPhone build, a signed Tizen package and simultaneous hardware testing are
-required before release. Mosaicast Dev build 12 has completed on EAS; TV signing,
-installation and simultaneous hardware validation have not been performed. See [peer validation](companion-validation.md).
+required before release. Mosaicast Dev build 13 completed locally, and build 12
+is available on EAS; TV signing, installation and simultaneous hardware
+validation have not been performed. See [peer validation](companion-validation.md).
