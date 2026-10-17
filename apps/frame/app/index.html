@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Packaged TV policy. Tizen access is origin-wide; this keeps scripts local and limits requests to LAN HTTP and lyrics. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' http://*; connect-src 'self' http://* http://*:8095 https://lrclib.net; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>Frame Music</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
