@@ -45,7 +45,7 @@ its own provisioning profile; EAS can reuse the team's distribution certificate.
 `app.config.js` selects `APP_VARIANT=development` by default. The `production`
 EAS profile explicitly sets `APP_VARIANT=production`, preserving the official
 `io.github.desperado.mosaicast` identifiers and `mosaicast` URL scheme.
-Version `0.1.0`, iOS build number `13`, and Android version code `5` are local;
+Version `0.1.0`, iOS build number `14`, and Android version code `5` are local;
 increment build numbers before uploading another binary to a store.
 
 When switching variants after a local native build, regenerate the ignored
@@ -86,6 +86,18 @@ the [TestFlight preparation notes](testflight.md). A direct-install preview
 cannot be reused as a TestFlight upload.
 
 ## Local iPhone builds
+
+Mosaicast Dev `0.1.0 (14)` was built locally on 18 October 2026 from commit
+`c821751`. Native compilation and code-signature verification passed. It includes
+scanner pinch/button zoom, QR launch routing, and the scan → connecting →
+connected → Listen flow. The corresponding signed Frame Music TV package was
+installed and launched on a Samsung GQ55LS03BGUXZG. Installation on the iPhone
+and simultaneous pairing acceptance checks remain to be run.
+
+For this development preview, scan inside **Mosaicast Dev → Connect phone + TV**.
+The normal iPhone Camera opens the app registered for `mosaicast`; the development
+preview registers `mosaicast-dev`, so camera-link validation needs an updated
+production-identity binary.
 
 Mosaicast Dev `0.1.0 (13)` was built locally on 17 October 2026 from commit
 `91c79d1`. Native compilation and code-signature verification passed. This IPA
@@ -189,6 +201,7 @@ the unsupported-native-build message for peer setup.
 
 Production JavaScript export is not a native compilation check. Full Xcode, a
 signed iPhone build, a signed Tizen package and simultaneous hardware testing are
-required before release. Mosaicast Dev build 13 completed locally, and build 12
-is available on EAS; TV signing, installation and simultaneous hardware
-validation have not been performed. See [peer validation](companion-validation.md).
+required before release. Mosaicast Dev build 14 completed locally, and build 12
+is available on EAS. TV signing, installation and launch passed on the Samsung
+GQ55LS03BGUXZG; simultaneous iPhone/TV validation remains to be run. See
+[peer validation](companion-validation.md).
