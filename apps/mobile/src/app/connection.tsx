@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Keyboard, Platform, TextInput, View } from 'react-native';
+import { AppState, Keyboard, Platform, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { discoverMusicCast, discoveryPrefix, privateIPv4, type DiscoveredDevice } from '@mosaicast/musiccast';
+import { discoverMusicCast, privateIPv4, type DiscoveredDevice } from '@mosaicast/musiccast';
 import { useApp } from '../state/app';
 import { normalizeAddress } from '../state/address';
 import { localSearchAddress } from '../state/discovery';
-import { BackHeader, Button, Card, Copy, Screen, styles } from '../components/ui';
+import { BackHeader, Button, Copy, InfoDialog, Screen, ScrollArea, styles } from '../components/ui';
+import { IPAddressInput } from '../components/ip-address-input';
 
 export default function Connection() {
   const app = useApp();
@@ -13,14 +14,14 @@ export default function Connection() {
   return <ConnectionForm {...app}/>;
 }
 
-function ConnectionForm({ colors, t, preferences, connect, deviceState, startDemo }: Pick<ReturnType<typeof useApp>, 'colors' | 't' | 'preferences' | 'connect' | 'deviceState' | 'startDemo'>) {
+function ConnectionForm({ t, preferences, connect, deviceState, startDemo }: Pick<ReturnType<typeof useApp>, 't' | 'preferences' | 'connect' | 'deviceState' | 'startDemo'>) {
   const [address, setAddress] = useState(preferences.address);
   const [invalid, setInvalid] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [failed, setFailed] = useState(false);
   const [searchState, setSearchState] = useState<'idle' | 'searching' | 'done' | 'cancelled' | 'error'>('idle');
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
-  const [range, setRange] = useState('');
+  const [infoOpen, setInfoOpen] = useState(false);
   const search = useRef<AbortController | null>(null);
   const submitting = useRef(false);
   const busy = connecting || deviceState.busy;
@@ -42,11 +43,10 @@ function ConnectionForm({ colors, t, preferences, connect, deviceState, startDem
     Keyboard.dismiss();
     const controller = new AbortController();
     search.current = controller;
-    setSearchState('searching'); setDevices([]); setRange(''); setFailed(false);
+    setSearchState('searching'); setDevices([]); setFailed(false);
     try {
       const local = await localSearchAddress();
       if (controller.signal.aborted) return;
-      setRange(`${discoveryPrefix(local)}.1–254`);
       await discoverMusicCast(local, {
         signal: controller.signal,
         onDevice: device => { if (!controller.signal.aborted) setDevices(previous => [...previous, device]); },
@@ -76,36 +76,34 @@ function ConnectionForm({ colors, t, preferences, connect, deviceState, startDem
       setConnecting(false);
     }
   }
-  return <Screen>
-    <BackHeader title={t('connection')}/>
-    <View style={styles.smallStack}><Copy kind="title">{t('connectionTitle')}</Copy><Copy color={colors.muted}>{t('connectionBody')}</Copy></View>
-    <Card style={{ backgroundColor: colors.tint }}><Copy kind="heading">{t('localTitle')}</Copy><Copy kind="small">{t('localBody')}</Copy><Copy kind="small">{t('networkHint')}</Copy></Card>
-    {Platform.OS === 'web' && <Card><Copy kind="heading">{t('bridgeTitle')}</Copy><Copy kind="small">{t('bridgeHint')}</Copy></Card>}
-    {Platform.OS !== 'web' ? <Card>
-      <Copy kind="heading">{t('discoveryTitle')}</Copy>
-      <Copy kind="small">{t('discoveryHint')}</Copy>
-      {range && <Copy kind="small">{t('discoveryRange')}: {range}</Copy>}
-      <Button label={t(searchState === 'searching' ? 'cancelSearch' : 'findDevices')} disabled={busy}
-        onPress={() => searchState === 'searching' ? cancelSearch() : void startSearch()}/>
-      {searchState === 'searching' && <Copy>{t('searchingDevices')}</Copy>}
-      {searchState === 'cancelled' && <Copy kind="small">{t('searchCancelled')}</Copy>}
-      {searchState === 'error' && <Copy accessibilityRole="alert">{t('discoveryError')}</Copy>}
-      {searchState === 'done' && devices.length === 0 && <Copy accessibilityRole="alert">{t('noDevicesFound')}</Copy>}
-      {devices.length > 0 && <Copy kind="small">{t('chooseDiscovered')}</Copy>}
-      {devices.map(device => <Button key={device.host} label={`${device.model} · ${device.host}`} disabled={busy} selected={address === device.host}
-        onPress={() => { cancelSearch(); setAddress(device.host); setInvalid(false); setFailed(false); }}/>) }
-    </Card> : <Copy kind="small">{t('discoveryNativeOnly')}</Copy>}
+  return <Screen header={<BackHeader title={t('connection')}/>} footer={<View style={styles.smallStack}>
+    <Button label={t('companion')} onPress={() => router.push('/companion')}/>
+    <View style={[styles.row, { gap: 8 }]}>
+      <View style={{ flex: 1 }}><Button label={t('tryDemo')} disabled={busy} onPress={() => { cancelSearch(); startDemo(); router.replace('/(tabs)/listen'); }}/></View>
+      <View style={{ flex: 1 }}><Button label={t('connectionHelp')} onPress={() => { Keyboard.dismiss(); setInfoOpen(true); }}/></View>
+    </View>
+  </View>}>
     <View style={styles.smallStack}>
       <Copy>{t('ipAddress')}</Copy>
-      <TextInput accessibilityLabel={t('ipAddress')} accessibilityHint={t('ipHint')} value={address} editable={!busy} placeholder="192.168.1.40" placeholderTextColor={colors.muted}
-        autoCapitalize="none" autoCorrect={false} autoComplete="off" keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'url'} returnKeyType="done" maxLength={64} onSubmitEditing={() => void submit()}
-        onChangeText={value => { cancelSearch(); setAddress(normalizeAddress(value)); setInvalid(false); setFailed(false); }}
-        style={{ minHeight: 56, padding: 16, fontSize: 18, borderRadius: 12, borderWidth: 1, borderColor: invalid ? colors.accent : colors.border, color: colors.text, backgroundColor: colors.surface }}/>
-      <Copy kind="small">{t(invalid ? 'invalidIP' : 'ipHint')}</Copy>
+      <IPAddressInput value={address} busy={busy} invalid={invalid} onSubmit={() => void submit()}
+        onChange={value => { cancelSearch(); setAddress(value); setInvalid(false); setFailed(false); }}/>
+      {invalid && <Copy kind="small" accessibilityRole="alert">{t('invalidIP')}</Copy>}
       {failed && <Copy accessibilityRole="alert">{t(deviceState.error ?? 'connectError')}</Copy>}
+      <Button label={t(busy ? 'connecting' : 'connectByIP')} primary disabled={busy || !address.trim()} onPress={() => void submit()}/>
     </View>
-    <Button label={t(busy ? 'connecting' : 'connectByIP')} primary disabled={busy || !address.trim()} onPress={() => void submit()}/>
-    <View style={{ flex: 1 }}/>
-    <Button label={t('tryDemo')} disabled={busy} onPress={() => { cancelSearch(); startDemo(); router.replace('/(tabs)/listen'); }}/>
+    {Platform.OS !== 'web' && <>
+      <Button label={t(searchState === 'searching' ? 'cancelSearch' : 'findDevices')} disabled={busy}
+        onPress={() => searchState === 'searching' ? cancelSearch() : void startSearch()}/>
+      {searchState === 'searching' && <Copy kind="small">{t('searchingDevices')}</Copy>}
+      {searchState === 'error' && <Copy accessibilityRole="alert">{t('discoveryError')}</Copy>}
+      {searchState === 'done' && devices.length === 0 && <Copy accessibilityRole="alert">{t('noDevicesFound')}</Copy>}
+      <ScrollArea>{devices.map(device => <Button key={device.host} label={`${device.model} · ${device.host}`} disabled={busy} selected={address === device.host}
+        onPress={() => { cancelSearch(); setAddress(device.host); setInvalid(false); setFailed(false); }}/>)}</ScrollArea>
+    </>}
+    <InfoDialog visible={infoOpen} title={t('connectionHelp')} onClose={() => setInfoOpen(false)}>
+      <Copy>{t('connectionBody')}</Copy><Copy kind="small">{t('ipHint')}</Copy>
+      <Copy kind="heading">{t('localTitle')}</Copy><Copy>{t('localBody')}</Copy><Copy>{t('networkHint')}</Copy>
+      {Platform.OS === 'web' && <><Copy kind="heading">{t('bridgeTitle')}</Copy><Copy>{t('bridgeHint')}</Copy></>}
+    </InfoDialog>
   </Screen>;
 }

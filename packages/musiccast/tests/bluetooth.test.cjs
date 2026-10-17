@@ -185,3 +185,50 @@ test('demo does not advertise Bluetooth output or simulate hardware commands', a
   for (const command of [{ type: 'bluetoothOutput', value: true }, { type: 'bluetoothScan', value: 'start' }, { type: 'bluetoothConnect', value: headphone.address }, { type: 'bluetoothDisconnect', value: 'disconnect' }]) await assert.rejects(demo.execute(command), /demo mode/);
   assert.equal((await demo.read()).bluetooth, undefined);
 });
+
+test('Bluetooth crosses the companion protocol with the same validation, and phone authority fences its writes', async () => {
+  const { validCommand, peerDeviceFetch, CommandRejectedError } = require('../dist');
+  for (const command of [{ type: 'bluetoothOutput', value: true }, { type: 'bluetoothScan', value: 'start' }, { type: 'bluetoothConnect', value: 'aabbccddeeff' }, { type: 'bluetoothDisconnect', value: 'disconnect' }]) assert.equal(validCommand(command), true);
+  for (const command of [{ type: 'bluetoothOutput', value: 'true' }, { type: 'bluetoothScan', value: 'stop' }, { type: 'bluetoothConnect', value: 'AA:BB:CC:DD:EE:FF' }, { type: 'bluetoothConnect', value: '../setPower' }, { type: 'bluetoothDisconnect', value: true }, { type: 'bluetoothConnect', value: 'AABBCCDDEEFF', extra: 1 }]) assert.equal(validCommand(command), false);
+  let dispatched = 0;
+  const fenced = peerDeviceFetch(() => false, async () => { dispatched++; });
+  for (const route of ['system/setBluetoothTxSetting', 'system/updateBluetoothDeviceList', 'system/connectBluetoothDevice', 'system/disconnectBluetoothDevice']) await assert.rejects(fenced(`http://192.168.1.50/YamahaExtendedControl/v1/${route}`));
+  assert.equal(dispatched, 0);
+  // A gate that fails before dispatch is a rejection, not an uncertain write.
+  const { client, writes } = device({ enabled: false });
+  await client.read();
+  await assert.rejects(client.execute({ type: 'bluetoothScan', value: 'start' }), error => error instanceof CommandRejectedError);
+  assert.equal(writes.length, 0);
+});
+
+test('shared Bluetooth state reaches both clients and a lost connect reply cannot replay the write', async () => {
+  const { CompanionCoordinator, CompanionController } = require('../dist');
+  const fixture = device();
+  const coordinator = new CompanionCoordinator(fixture.client, 'bluetooth-generation');
+  let loseConnectReply = true;
+  const exchange = id => async request => {
+    if (!request) return { sequence: coordinator.lastSequence(id), outcome: 'observed', state: coordinator.state };
+    const reply = await coordinator.handle(id, request);
+    if (id === 'phone' && request.operation.command?.type === 'bluetoothConnect' && loseConnectReply) {
+      loseConnectReply = false;
+      throw new Error('Lost reply after dispatch');
+    }
+    return reply;
+  };
+  const phone = new CompanionController('192.168.1.50', exchange('phone'));
+  const tv = new CompanionController('192.168.1.50', exchange('tv'));
+  await coordinator.poll();
+  await phone.reconcile();
+  await assert.rejects(phone.execute({ type: 'bluetoothConnect', value: headphone.address }), error => error.code === 'uncertain');
+  await tv.read();
+  assert.equal(tv.state.snapshot.bluetooth.connected.address, headphone.address);
+  await coordinator.poll();
+  await phone.read();
+  await assert.rejects(phone.execute({ type: 'bluetoothConnect', value: headphone.address }), error => error.code === 'reconcile');
+  assert.equal(fixture.writes.length, 1);
+  await phone.reconcile();
+  await phone.execute({ type: 'bluetoothDisconnect', value: 'disconnect' });
+  await tv.read();
+  assert.equal(tv.state.snapshot.bluetooth.connected, undefined);
+  assert.deepEqual(fixture.writes.map(write => write.route), ['connectBluetoothDevice', 'disconnectBluetoothDevice']);
+});

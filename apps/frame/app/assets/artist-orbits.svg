@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" fill="none">
+  <defs>
+    <radialGradient id="planet"><stop stop-color="#cf7e71"/><stop offset=".65" stop-color="#683950"/><stop offset="1" stop-color="#101522"/></radialGradient>
+    <linearGradient id="horizon" x2="0" y2="1"><stop stop-color="#6d879b"/><stop offset="1" stop-color="#121523"/></linearGradient>
+  </defs>
+  <circle cx="1190" cy="250" r="155" fill="url(#planet)"/>
+  <g stroke="#a0b8cf" stroke-opacity=".4">
+    <ellipse cx="1150" cy="320" rx="460" ry="115" transform="rotate(-24 1150 320)"/>
+    <ellipse cx="1150" cy="320" rx="520" ry="135" transform="rotate(-24 1150 320)"/>
+    <path d="M440 680 1600 480M320 730 1600 530M170 800 1600 590M0 890 1600 660M0 990 1600 750M630 630 210 1000M800 600 580 1000M970 570 970 1000M1140 540 1360 1000"/>
+  </g>
+  <path d="m0 790 290-85 210 25 250-126 210 55 230-98 200 39 210-70v470H0Z" fill="url(#horizon)" opacity=".4"/>
+  <g fill="#cad9e6" opacity=".5"><circle cx="750" cy="165" r="2"/><circle cx="1460" cy="170" r="2"/><circle cx="980" cy="90" r="1.5"/><circle cx="620" cy="360" r="1.5"/><circle cx="1480" cy="440" r="1.5"/><circle cx="870" cy="430" r="2"/></g>
+</svg>

@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { discoverMusicCast, discoveryPrefix } = require('../dist/discovery');
+const { discoverMusicCast, discoverPeers, discoveryPrefix } = require('../dist/discovery');
 const reply = value => new Response(JSON.stringify(value));
 
 test('search stays inside the private /24, skips this device, and bounds concurrent read-only requests', async () => {
@@ -103,4 +103,17 @@ test('probe deadline aborts a stalled request without retrying it', async () => 
   });
   assert.equal(calls, 12);
   assert.equal(timedOut, 12);
+});
+
+test('peer discovery accepts only the probed private origin and a current version/boot descriptor', async () => {
+  const found = [];
+  const result = await discoverPeers('192.168.1.40', { signal: new AbortController().signal, onDevice: value => found.push(value),
+    fetcher: async url => {
+      const host = new URL(url).hostname;
+      assert.equal(new URL(url).pathname, '/.well-known/mosaicast-peer');
+      return reply({ service: 'mosaicast-peer', version: host.endsWith('.2') ? 2 : 1,
+        url: host.endsWith('.3') ? 'http://192.168.2.3:8095' : `http://${host}:8095`,
+        epoch: host.endsWith('.1') || host.endsWith('.2') || host.endsWith('.3') ? 'a'.repeat(32) : 'invalid' });
+    } });
+  assert.deepEqual(result, [{url: 'http://192.168.1.1:8095'}]); assert.deepEqual(found, result);
 });

@@ -1,11 +1,12 @@
 const http = require('node:http');
 const { Buffer } = require('node:buffer');
-const { MusicCastClient, privateIPv4 } = require('../packages/musiccast/dist');
+const { BrowseError, MusicCastClient, privateIPv4, validBrowseAction, validBrowseIndex } = require('../packages/musiccast/dist');
 
 const origins = new Set([8081, 8091, 19006].flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]));
 function validCommand(command) {
   if (!command || typeof command !== 'object' || Array.isArray(command) || Object.keys(command).some(key => !['type', 'value'].includes(key))) return false;
-  const values = { power: ['on', 'standby'], input: [], volume: ['up', 'down'], mute: [true, false], playback: ['play', 'pause', 'previous', 'next'], bluetoothOutput: [true, false], bluetoothScan: ['start'], bluetoothDisconnect: ['disconnect'] };
+  const values = { power: ['on', 'standby'], input: [], volume: ['up', 'down'], mute: [true, false], playback: ['play', 'pause', 'previous', 'next'], tunerBand: ['fm', 'dab'], tunerTune: ['up', 'down', 'auto_up', 'auto_down'], tunerService: ['previous', 'next'], tunerScan: ['start', 'cancel'], bluetoothOutput: [true, false], bluetoothScan: ['start'], bluetoothDisconnect: ['disconnect'] };
+  if (command.type === 'tunerPreset') return Number.isInteger(command.value) && command.value >= 1 && command.value <= 256;
   if (command.type === 'bluetoothConnect') return typeof command.value === 'string' && /^[\da-f]{12}$/i.test(command.value);
   return command.type === 'input' ? typeof command.value === 'string' && /^[a-z][a-z0-9_]{0,47}$/.test(command.value)
     : Object.hasOwn(values, command.type) && values[command.type].includes(command.value);
@@ -27,7 +28,7 @@ function createBridge(createClient = host => new MusicCastClient(host)) {
       response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       response.writeHead(204); response.end(); return;
     }
-    if (request.method !== 'POST' || !['/read', '/command'].includes(request.url) || request.headers['content-type'] !== 'application/json') {
+    if (request.method !== 'POST' || !['/read', '/command', '/browse', '/browse-action'].includes(request.url) || request.headers['content-type'] !== 'application/json') {
       reply(400, { error: 'Unsupported request' }); return;
     }
     if (inFlight >= 8) { reply(429, { error: 'Bridge busy' }); return; }
@@ -42,7 +43,9 @@ function createBridge(createClient = host => new MusicCastClient(host)) {
       let data;
       try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { reply(400, { error: 'Invalid JSON' }); return; }
-      if (!data || typeof data.host !== 'string' || !privateIPv4(data.host) || (request.url === '/command' && !validCommand(data.command))) {
+      if (!data || typeof data.host !== 'string' || !privateIPv4(data.host) || (request.url === '/command' && !validCommand(data.command))
+        || (request.url === '/browse' && (!['deezer', 'server', 'usb', 'net_radio'].includes(data.input) || !validBrowseIndex(data.index)))
+        || (request.url === '/browse-action' && !validBrowseAction(data.action))) {
         reply(400, { error: 'Invalid address or command' }); return;
       }
       if (!clients.has(data.host)) {
@@ -50,9 +53,10 @@ function createBridge(createClient = host => new MusicCastClient(host)) {
         clients.set(data.host, createClient(data.host));
       }
       const client = clients.get(data.host);
-      const snapshot = request.url === '/read' ? await client.read() : await client.execute(data.command);
-      reply(200, snapshot);
-    } catch { reply(503, { error: 'Device request failed. Refresh before another command.' }); }
+      const result = request.url === '/read' ? await client.read() : request.url === '/command' ? await client.execute(data.command)
+        : request.url === '/browse' ? await client.browse(data.input, data.index) : await client.browseAction(data.action);
+      reply(200, result);
+    } catch (error) { reply(503, { error: 'Device request failed. Refresh before another command.', ...(error instanceof BrowseError ? { code: error.code } : {}) }); }
     finally { inFlight--; }
   });
   server.requestTimeout = 10000;

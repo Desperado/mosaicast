@@ -1,3 +1,5 @@
+> Historical brand-exploration brief. For the current implementation and owner priorities, use [the 17 October design handoff](current-design-handoff.md).
+
 # Claude Design prompt: Mosaicast — English
 
 Copy everything below the divider into Claude Design. Optionally attach `musiccast-user-feedback.md`, the Home Entertainment README, existing screenshots, and `src/musiccast/types.ts`. Use fictional music and sample artwork. The Ukrainian equivalent is `claude-design-prompt.uk.md`.

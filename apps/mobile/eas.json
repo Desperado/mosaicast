@@ -21,9 +21,18 @@
       }
     },
     "production": {
+      "node": "24.18.0",
       "distribution": "store",
+      "autoIncrement": true,
       "env": {
         "APP_VARIANT": "production"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6823949587"
       }
     }
   }

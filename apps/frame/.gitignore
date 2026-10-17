@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+.context/
+*.wgt
+.buildResult/
+author-signature.xml
+signature1.xml
+app/bundle.js

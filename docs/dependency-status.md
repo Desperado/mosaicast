@@ -13,7 +13,7 @@ ESLint 10 directly and the regression test passes without it.
 
 ## Security advisories
 
-Checked on 14 October 2026 against the committed npm lockfile. `npm audit`
+Checked on 17 October 2026 against the committed npm lockfile. `npm audit`
 reports 28 affected package entries: 18 high and 10 moderate, with no critical
 entries. Many entries share the same underlying advisory through Expo/Metro
 dependency chains; they are not 28 independent defects.

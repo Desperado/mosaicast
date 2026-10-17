@@ -5,10 +5,11 @@ export interface Preferences {
   demoStarted: boolean;
   mode: 'demo' | 'device';
   address: string;
+  connection?: 'direct' | 'companion';
   hiddenBluetoothDevices: string[];
 }
 
-export const defaults: Preferences = { version: 1, appearance: 'system', language: 'system', demoStarted: false, mode: 'demo', address: '', hiddenBluetoothDevices: [] };
+export const defaults: Preferences = { version: 1, appearance: 'system', language: 'system', demoStarted: false, mode: 'demo', address: '', connection: 'direct', hiddenBluetoothDevices: [] };
 export const preferencesKey = 'mosaicast.preferences.v1';
 
 export function parsePreferences(raw: string | null): Preferences {
@@ -22,6 +23,7 @@ export function parsePreferences(raw: string | null): Preferences {
     language: record.language === 'en' || record.language === 'uk' ? record.language : 'system',
     demoStarted: record.demoStarted === true,
     mode: record.mode === 'device' ? 'device' : 'demo',
+    connection: record.connection === 'companion' ? 'companion' : 'direct',
     address: typeof record.address === 'string' && record.address.length <= 15 ? record.address : '',
     hiddenBluetoothDevices: Array.isArray(record.hiddenBluetoothDevices)
       ? [...new Set(record.hiddenBluetoothDevices.filter((key): key is string => typeof key === 'string' && /^\d{1,3}(?:\.\d{1,3}){3}\/[\da-f]{12}$/i.test(key)).map(key => key.toUpperCase()))].slice(-512)
