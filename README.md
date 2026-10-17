@@ -35,6 +35,7 @@ docs/design/         Design prompts, user feedback, and prototype intake
 ```
 
 The iPhone and Samsung Frame share one Yamaha through [direct app coordination](docs/companion.md).
+For work in the separate Samsung TV repository, use the [integration handoff](docs/samsung-frame-handoff.md).
 No computer is needed while listening. With both apps open, the phone coordinates;
 after the phone closes, the TV can take over after a recovery interval and Refresh.
 The TV automatically discovers the phone, and pairing compares digits on both screens.
@@ -74,6 +75,9 @@ npm run test:layout    # phone viewport checks against the exported web bundle
 CI also builds the classic TV bundle and runs all three checks on pull requests and pushes to main. The export checks
 iOS, Android, and web bundles; it does not compile or install native binaries.
 See [native builds](docs/native-builds.md) to produce an Android APK or iOS preview.
+Local and preview builds install as **Mosaicast Dev**, alongside the official
+TestFlight/store app. The `production` EAS profile keeps the official app identity.
+
 See [mobile layout validation](docs/mobile-layout.md) for the viewport matrix
 and the remaining checks that require a physical phone.
 
@@ -110,11 +114,30 @@ If another remote changes the menu, refresh it before selecting an item.
 See [source browsing](docs/source-browsing.md) for scope and validation limits.
 
 Writes are sent once. If a result is uncertain, explicitly refresh status before
-another command. Foreground polling every eight seconds never replays commands.
+another command. In direct phone mode, routine foreground refreshes wait 30 seconds after the last
+read or command, stay silent, and never replay commands. Polling pauses in the
+background, hidden browser tabs, and demo rooms. Failed reads back off to one,
+then two minutes. Only a requested Bluetooth search polls every three seconds,
+for at most 30 seconds, before returning to the normal interval.
+Shared phone + TV mode retains its coordinator's two-second receiver updates;
+these reads never start a Bluetooth search or replay a command.
 Next/previous acknowledgement means accepted, not a confirmed track transition.
 On iPhone, foreground physical volume buttons control the connected Yamaha.
 The app restores the phone's original output volume when capture ends. This
 integration still needs physical-device verification in the new preview.
+
+On Yamaha devices that advertise Bluetooth transmission, **Listen → Bluetooth
+headphones** lets you enable output, search, connect and disconnect. Select a
+source other than Bluetooth, enable output, put the headphones in pairing mode,
+then search and select them. Audio goes directly from Yamaha to the headphones.
+The list comes from Yamaha's last search; ordinary refresh never starts a search.
+Search acknowledgement is distinct from a confirmed connection. These controls
+have automated coverage; a user has confirmed a headphone connection on hardware.
+Headphone volume must be adjusted on the headphones; the Yamaha volume/mute
+controls affect its speakers. **Remove from this app** hides disconnected old
+headphones locally for the selected Yamaha, including after restarting the app.
+**Restore removed headphones** shows them again. Yamaha's documented API does
+not expose pairing deletion, so removal does not erase its pairing records.
 
 ## Implementation order
 

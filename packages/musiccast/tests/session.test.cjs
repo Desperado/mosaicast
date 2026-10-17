@@ -95,7 +95,7 @@ test('Refresh cannot overlap a pending write or erase its uncertain result', asy
   assert.equal(session.state.refreshing, false);
 });
 
-test('poll reads and commands cannot overlap; stale state cannot issue commands', async () => {
+test('silent polls keep controls enabled and serialize a tap instead of discarding it', async () => {
   let writes = 0, fail = false;
   const gate = deferred();
   let calls = 0;
@@ -105,13 +105,91 @@ test('poll reads and commands cannot overlap; stale state cannot issue commands'
   }));
   await session.connect(host);
   const polling = session.refresh(false);
+  assert.equal(session.state.busy, false);
+  const pending = session.execute({ type: 'power', value: 'on' });
+  assert.equal(session.state.busy, true);
+  await session.refresh(false);
   await session.execute({ type: 'power', value: 'on' });
   assert.equal(writes, 0);
-  gate.resolve(snapshot); await polling;
+  assert.equal(calls, 2);
+  gate.resolve(snapshot); await polling; await pending;
+  assert.equal(writes, 1);
   fail = true; await session.refresh();
   assert.equal(session.state.phase, 'stale');
   await session.execute({ type: 'power', value: 'on' });
-  assert.equal(writes, 0);
+  assert.equal(writes, 1);
+});
+
+test('idle polling waits 30 seconds after connect, manual refresh and commands', async () => {
+  let now = 0, reads = 0;
+  const notifications = [];
+  const session = new DeviceSession(() => ({ read: async () => { reads++; return snapshot; }, execute: async () => snapshot }), value => notifications.push(value), () => now);
+  await session.connect(host);
+  notifications.length = 0;
+  for (now = 1000; now <= 60000; now += 1000) await session.poll();
+  assert.equal(reads, 3); // Initial read, then two refreshes in one minute.
+  assert.ok(notifications.every(state => state.busy === false));
+  now = 65000; await session.refresh();
+  now = 94000; await session.poll();
+  assert.equal(reads, 4);
+  await session.execute({ type: 'power', value: 'on' });
+  now = 95000; await session.poll();
+  assert.equal(reads, 4);
+  now = 124000; await session.poll();
+  assert.equal(reads, 5);
+});
+
+test('failed automatic reads back off to one and two minutes; manual refresh remains immediate', async () => {
+  let now = 0, reads = 0, fail = false;
+  const session = new DeviceSession(() => ({ read: async () => { reads++; if (fail) throw new Error('offline'); return snapshot; } }), () => {}, () => now);
+  await session.connect(host);
+  fail = true;
+  now = 30000; await session.poll();
+  now = 89000; await session.poll();
+  assert.equal(reads, 2);
+  now = 90000; await session.poll();
+  now = 209000; await session.poll();
+  assert.equal(reads, 3);
+  now = 210000; await session.poll();
+  now = 211000; fail = false; await session.refresh();
+  assert.equal(reads, 5);
+  assert.equal(session.state.phase, 'connected');
+  now = 240000; await session.poll();
+  assert.equal(reads, 5);
+  now = 241000; await session.poll();
+  assert.equal(reads, 6);
+});
+
+test('only a requested Bluetooth search polls quickly and only for thirty seconds', async () => {
+  let now = 0, reads = 0, updating = false;
+  const result = () => ({ ...snapshot, bluetooth: { enabled: true, devices: [], updating } });
+  const session = new DeviceSession(() => ({ read: async () => { reads++; return result(); }, execute: async () => { updating = true; return result(); } }), () => {}, () => now);
+  await session.connect(host);
+  await session.execute({ type: 'bluetoothScan', value: 'start' });
+  for (now = 1000; now <= 60000; now += 1000) await session.poll();
+  assert.equal(reads, 12); // Initial, ten quick search reads, one normal read.
+  now = 61000; updating = false; await session.refresh();
+  now = 64000; await session.poll();
+  assert.equal(reads, 13);
+});
+
+test('a failed silent read blocks its queued command; a replaced connection cannot receive an old queued tap', async () => {
+  for (const replace of [false, true]) {
+    const gate = deferred();
+    let reads = 0, writes = 0;
+    const session = new DeviceSession(address => ({
+      read: async () => address !== host || ++reads === 1 ? snapshot : gate.promise.then(() => { throw new Error('offline'); }),
+      execute: async () => { writes++; return snapshot; },
+    }));
+    await session.connect(host);
+    const polling = session.refresh(false);
+    const command = session.execute({ type: 'power', value: 'on' });
+    if (replace) { session.disconnect(); await session.connect('192.168.1.51'); }
+    gate.resolve(); await polling; await command;
+    assert.equal(writes, 0);
+    assert.equal(session.state.phase, replace ? 'connected' : 'stale');
+    assert.equal(session.state.busy, false);
+  }
 });
 
 test('late commands from an old device cannot overwrite the new connection; skips are only accepted', async () => {
@@ -222,4 +300,43 @@ test('replacing, disconnecting and failed or late connects close their native re
   const pending = session.connect('late'); session.disconnect(); gate.resolve(snapshot);
   assert.equal(await pending, false);
   assert.deepEqual(closed, [host, 'replacement', 'failed', 'late']);
+});
+
+function silentReadFixture() {
+  const gate = deferred(), order = [];
+  let reads = 0;
+  const page = { input: 'deezer', token: '1', title: 'Library', items: [] };
+  const session = new DeviceSession(() => ({
+    read: async () => { order.push('read'); return ++reads === 2 ? gate.promise : snapshot; },
+    reconcile: async () => { order.push('reconcile'); return snapshot; },
+    browse: async () => { order.push('browse'); return page; },
+  }));
+  return { gate, order, page, session };
+}
+
+test('explicit Refresh waits for an in-flight silent read, then reconciles', async () => {
+  const { gate, order, session } = silentReadFixture();
+  await session.connect(host);
+  const silent = session.refresh(false);
+  assert.equal(session.state.busy, false);
+  const refresh = session.refresh();
+  assert.equal(session.state.busy, true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(order, ['read', 'read']);
+  gate.resolve(snapshot); await silent; await refresh;
+  assert.deepEqual(order, ['read', 'read', 'reconcile']);
+  assert.equal(session.state.busy, false);
+});
+
+test('a menu request during a silent read is reserved, then runs once after it', async () => {
+  const { gate, order, page, session } = silentReadFixture();
+  await session.connect(host);
+  const silent = session.refresh(false);
+  const browse = session.loadBrowse('deezer');
+  assert.equal(session.state.busy, true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(order, ['read', 'read']);
+  gate.resolve(snapshot); await silent; await browse;
+  assert.deepEqual(order, ['read', 'read', 'browse']);
+  assert.deepEqual(session.state.browse, page); assert.equal(session.state.busy, false);
 });

@@ -5,8 +5,9 @@ const { BrowseError, MusicCastClient, privateIPv4, validBrowseAction, validBrows
 const origins = new Set([8081, 8091, 19006].flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]));
 function validCommand(command) {
   if (!command || typeof command !== 'object' || Array.isArray(command) || Object.keys(command).some(key => !['type', 'value'].includes(key))) return false;
-  const values = { power: ['on', 'standby'], input: [], volume: ['up', 'down'], mute: [true, false], playback: ['play', 'pause', 'previous', 'next'], tunerBand: ['fm', 'dab'], tunerTune: ['up', 'down', 'auto_up', 'auto_down'], tunerService: ['previous', 'next'], tunerScan: ['start', 'cancel'] };
+  const values = { power: ['on', 'standby'], input: [], volume: ['up', 'down'], mute: [true, false], playback: ['play', 'pause', 'previous', 'next'], tunerBand: ['fm', 'dab'], tunerTune: ['up', 'down', 'auto_up', 'auto_down'], tunerService: ['previous', 'next'], tunerScan: ['start', 'cancel'], bluetoothOutput: [true, false], bluetoothScan: ['start'], bluetoothDisconnect: ['disconnect'] };
   if (command.type === 'tunerPreset') return Number.isInteger(command.value) && command.value >= 1 && command.value <= 256;
+  if (command.type === 'bluetoothConnect') return typeof command.value === 'string' && /^[\da-f]{12}$/i.test(command.value);
   return command.type === 'input' ? typeof command.value === 'string' && /^[a-z][a-z0-9_]{0,47}$/.test(command.value)
     : Object.hasOwn(values, command.type) && values[command.type].includes(command.value);
 }

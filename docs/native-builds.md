@@ -35,10 +35,23 @@ npx eas-cli@latest init --account YOUR_EXPO_ACCOUNT
 Run `init` only when linking a fork or replacing the project. Access tokens and
 signing material must never be committed.
 
-The initial Android package and iOS bundle identifier are both
-`io.github.desperado.mosaicast`. Confirm their availability before provisioning
-or store registration. Version `0.1.0` and build number `6` are local; increment
-build numbers before uploading another binary to a store.
+Local commands and the `preview`/`simulator` profiles build **Mosaicast Dev**.
+Its iOS bundle identifier and Android package are
+`io.github.desperado.mosaicast.dev`, with URL scheme `mosaicast-dev`. It can stay
+installed alongside the official **Mosaicast** TestFlight/store app, and has its
+own saved preferences and local-network permission. The new iOS identifier needs
+its own provisioning profile; EAS can reuse the team's distribution certificate.
+
+`app.config.js` selects `APP_VARIANT=development` by default. The `production`
+EAS profile explicitly sets `APP_VARIANT=production`, preserving the official
+`io.github.desperado.mosaicast` identifiers and `mosaicast` URL scheme.
+Version `0.1.0`, iOS build number `10`, and Android version code `5` are local;
+increment build numbers before uploading another binary to a store.
+
+When switching variants after a local native build, regenerate the ignored
+native directories with `npx expo prebuild --clean` before `npx expo run:ios`
+or `npx expo run:android`. Set the same `APP_VARIANT` on both commands. This
+replaces generated native files; keep customizations in app config and plugins.
 
 ## Android phone or emulator
 
@@ -113,6 +126,18 @@ cannot be installed on an iPhone. LAN access still needs real-device testing.
   with an empty station list. Check pending commands do not dim or shift controls.
 - Send each command once. After an uncertain result, explicitly refresh before
   another write. Test an unreachable device and Wi-Fi loss.
+- Leave the live screen idle: routine refreshes must not flash pending or disable
+  controls. Tap a control during a slow automatic read; the command should run
+  once after that read succeeds. Check 30-second idle polling, offline backoff,
+  and no periodic requests in the background, hidden web tabs, or demo rooms.
+- On a model reporting Bluetooth output, select a non-Bluetooth source, enable
+  output, put headphones in pairing mode, search, connect and verify audio.
+  Check empty results, a running search, disconnect, disable, standby and
+  Bluetooth input conflicts. Confirm that refresh/relaunch never starts a search
+  or reconnects headphones, and that a timed-out connection is not retried.
+  Adjust headphone volume on the headphones and confirm the app labels its
+  controls as speaker volume. Disconnect an old entry, remove it from the app,
+  relaunch, then restore it. Removal must not send an unpair command to Yamaha.
 - Background and resume the app; check that state refreshes and no command is
   replayed. Relaunch and verify saved device mode, language, and appearance.
 - Switch to demo and verify it sends no requests to the Yamaha.
@@ -125,6 +150,8 @@ See Expo's [monorepo build setup](https://docs.expo.dev/build-reference/build-wi
 [APK guide](https://docs.expo.dev/build-reference/apk/),
 [internal distribution](https://docs.expo.dev/build/internal-distribution/),
 and [simulator guide](https://docs.expo.dev/build-reference/simulators/).
+See [app variants](https://docs.expo.dev/build-reference/variants/) for separate
+development and production identities.
 
 ## iPhone / Frame peer integration
 

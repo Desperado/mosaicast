@@ -12,6 +12,7 @@ export interface Features {
   controls: string[];
   sources: Source[];
   connectivity: string[];
+  bluetoothOutput?: boolean;
   tuner?: TunerFeatures;
   volumeRange?: { min: number; max: number; step: number };
 }
@@ -41,9 +42,30 @@ export interface Snapshot {
   tuner?: TunerState;
   track?: Track;
   trackUnavailable: boolean;
+  bluetooth?: BluetoothState;
 }
 
+export interface BluetoothDevice {
+  name: string;
+  address: string;
+  type: 'loudspeaker' | 'headphone' | 'handsfree_device' | 'unknown';
+}
+
+export interface BluetoothState {
+  enabled: boolean;
+  connected?: BluetoothDevice;
+  updating: boolean;
+  devices: BluetoothDevice[];
+}
+
+export type BluetoothCommand =
+  | { type: 'bluetoothOutput'; value: boolean }
+  | { type: 'bluetoothScan'; value: 'start' }
+  | { type: 'bluetoothConnect'; value: string }
+  | { type: 'bluetoothDisconnect'; value: 'disconnect' };
+
 export type Command =
+  | BluetoothCommand
   | { type: 'power'; value: Power }
   | { type: 'input'; value: string }
   | { type: 'volume'; value: 'up' | 'down' }

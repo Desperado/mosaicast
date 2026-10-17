@@ -18,7 +18,9 @@ Before a mobile release:
   lockfile and verify compatible fixes or documented mitigations.
 - Review privacy disclosures against actual data flows. Do not claim zero
   collection if optional integrations send data to external providers.
-- Confirm the initial `io.github.desperado.mosaicast` identifiers, icons,
+- Use the `production` EAS profile for the official
+  `io.github.desperado.mosaicast` identifiers. Local and preview builds use
+  `io.github.desperado.mosaicast.dev` to coexist with the official app. Confirm icons,
   version/build numbers, and store accounts. Preview profiles and instructions
   are in [native builds](native-builds.md). Keep signing credentials in EAS or
   protected local storage; never commit them.

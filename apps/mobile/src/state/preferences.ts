@@ -6,9 +6,10 @@ export interface Preferences {
   mode: 'demo' | 'device';
   address: string;
   connection?: 'direct' | 'companion';
+  hiddenBluetoothDevices: string[];
 }
 
-export const defaults: Preferences = { version: 1, appearance: 'system', language: 'system', demoStarted: false, mode: 'demo', address: '', connection: 'direct' };
+export const defaults: Preferences = { version: 1, appearance: 'system', language: 'system', demoStarted: false, mode: 'demo', address: '', connection: 'direct', hiddenBluetoothDevices: [] };
 export const preferencesKey = 'mosaicast.preferences.v1';
 
 export function parsePreferences(raw: string | null): Preferences {
@@ -24,7 +25,21 @@ export function parsePreferences(raw: string | null): Preferences {
     mode: record.mode === 'device' ? 'device' : 'demo',
     connection: record.connection === 'companion' ? 'companion' : 'direct',
     address: typeof record.address === 'string' && record.address.length <= 15 ? record.address : '',
+    hiddenBluetoothDevices: Array.isArray(record.hiddenBluetoothDevices)
+      ? [...new Set(record.hiddenBluetoothDevices.filter((key): key is string => typeof key === 'string' && /^\d{1,3}(?:\.\d{1,3}){3}\/[\da-f]{12}$/i.test(key)).map(key => key.toUpperCase()))].slice(-512)
+      : [],
   };
+}
+
+// These keys only filter the app's list; they never unpair a device on Yamaha.
+export function bluetoothDeviceKey(host: string, address: string): string {
+  return `${host}/${address.toUpperCase()}`;
+}
+
+export function updateHiddenBluetoothDevices(current: string[], host: string, address?: string): string[] {
+  return address
+    ? [...new Set([...current, bluetoothDeviceKey(host, address)])].slice(-512)
+    : current.filter(key => !key.startsWith(`${host}/`));
 }
 
 export function resolveLanguage(preference: Preferences['language'], systemLanguage: string | null | undefined): 'en' | 'uk' {

@@ -37,7 +37,8 @@ busy state. Rooms and playback are session-only fixtures; they are never saved
 as discovered hardware. CD and radio examples hide unsupported track controls.
 
 AsyncStorage holds one versioned preferences record: appearance, language,
-onboarding completion, selected demo/device mode, and a private IPv4 address. System preferences
+onboarding completion, selected demo/device mode, a private IPv4 address, and up to
+512 hidden Bluetooth entries keyed by receiver host and headphone address. System preferences
 follow React Native's color-scheme hook and Expo Localization's locale hook;
 unsupported system languages fall back to English. Writes are queued in order,
 including after an earlier failure, and failure is shown with a retry action.
@@ -52,8 +53,17 @@ in demo mode. Switching to demo invalidates the session and sends no commands.
 `DeviceSession` serializes reads and commands and drops late responses after a
 connection changes. Failed reads mark displayed state stale and disable commands.
 Any failed command conservatively requires an explicit successful refresh before
-another write. Foreground polling every eight seconds and app resume only read;
-automatic polling cannot clear an uncertain command. Pending, confirmed,
+another write. In direct phone mode, routine foreground polling waits 30 seconds after a completed
+read or command. Automatic refreshes do not set UI busy state; an enabled control
+reserves its command and waits for any in-flight read instead of dropping the tap.
+No reads or commands overlap within a connection. Polling pauses outside the live
+room, while the app is inactive/backgrounded, and in hidden browser tabs. Resume
+respects the same freshness deadline. Failed reads back off to one, then two
+minutes; an explicit refresh remains immediate. A requested Bluetooth search
+uses three-second reads for at most 30 seconds, then the normal interval.
+Shared mode uses the active coordinator's existing two-second receiver updates;
+session polling is disabled there. Passive Bluetooth reads never initiate a search.
+Automatic polling cannot clear an uncertain command. Pending, confirmed,
 accepted and uncertain outcomes are distinct. No raw error is shown as UI copy.
 
 ## Local device adapter
@@ -72,6 +82,26 @@ loopback, public addresses, and addresses ending in .0/.255 are unsupported.
 There is no authentication flow, event
 listener, persistent capability caching, room grouping, absolute-volume slider, or persisted device registry yet.
 Connectivity labels describe advertised support, not enabled settings.
+
+Bluetooth output is exposed only for devices advertising `bluetooth_tx_setting`
+in `system/getFeatures`. Powered-on snapshots read `getBluetoothInfo` and, when
+output is enabled, the cached `getBluetoothDeviceList`. Bluetooth read failures
+leave the main player usable and Bluetooth controls unavailable. A user request
+alone triggers `updateBluetoothDeviceList`; polling never starts a search.
+Commands refresh capabilities, power/input and Bluetooth state before dispatch.
+Connections require an address in Yamaha's current list and a finished search.
+Bluetooth input blocks enabling, searching and connecting; disconnecting and
+disabling remain available. Enable/connect/disconnect require observed state;
+search only reports acceptance. Connect requests allow 20 seconds for Yamaha's
+response. No Bluetooth write is retried. Demo has no Bluetooth capabilities.
+The commands follow Yamaha Extended Control API Basic Rev. 2.0, sections 4.14–4.20;
+a user has confirmed a headphone connection on hardware. The receiver volume/mute
+controls do not adjust Bluetooth headphone volume. The UI labels speaker volume
+and directs the listener to headphone controls while Bluetooth output is enabled.
+Removing an old entry only filters Mosaicast's list and persists locally; it sends
+no device command. Connected headphones stay visible, even if previously hidden.
+Restore clears the filter for the current receiver only. Pairing deletion is not
+exposed by the documented Yamaha API and is not presented as an available control.
 
 On-demand native discovery uses Expo Network to obtain the phone's local IPv4
 on Wi-Fi or Ethernet. The pure adapter scans only its `/24` range, skipping the

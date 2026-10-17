@@ -73,6 +73,19 @@ test('bridge read sends no writes; accepted command is executed once', async () 
   assert.deepEqual(calls, [{ host: '192.168.1.50', read: true }, { host: '192.168.1.50', command }]);
 }));
 
+test('bridge validates Bluetooth commands and dispatches each accepted request once', async () => fixture(async (send, calls) => {
+  const host = '192.168.1.50';
+  for (const command of [
+    { type: 'bluetoothOutput', value: 'true' }, { type: 'bluetoothScan', value: 'stop' },
+    { type: 'bluetoothDisconnect', value: true }, { type: 'bluetoothConnect', value: 'AA:BB:CC:DD:EE:FF' },
+    { type: 'bluetoothConnect', value: '../setPower' }, { type: 'bluetoothConnect', value: 'AABBCCDDEEFF', route: 'other' },
+  ]) assert.equal((await send({ host, command })).status, 400);
+  assert.deepEqual(calls, []);
+  const commands = [{ type: 'bluetoothOutput', value: true }, { type: 'bluetoothOutput', value: false }, { type: 'bluetoothScan', value: 'start' }, { type: 'bluetoothConnect', value: 'AABBCCDDEEFF' }, { type: 'bluetoothDisconnect', value: 'disconnect' }];
+  for (const command of commands) assert.equal((await send({ host, command })).status, 200);
+  assert.deepEqual(calls, commands.map(command => ({ host, command })));
+}));
+
 test('bridge validates radio command values before any device call', async () => fixture(async (send, calls) => {
   const host = '192.168.1.50';
   for (const command of [{ type: 'tunerBand', value: 'bogus' }, { type: 'tunerTune', value: 'direct' }, { type: 'tunerService', value: 'up' }, { type: 'tunerPreset', value: 0 }, { type: 'tunerPreset', value: 257 }, { type: 'tunerPreset', value: 1.5 }]) assert.equal((await send({ host, command })).status, 400);

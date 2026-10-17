@@ -26,6 +26,8 @@ export default function Listen() {
   const canMute = snapshot.features.controls.includes('mute') && typeof snapshot.status.mute === 'boolean';
   const ratio = range && maxVolume !== undefined && volume !== undefined && maxVolume > range.min ? (volume - range.min) / (maxVolume - range.min) : 0;
   const input = snapshot.features.sources.find(source => source.id === snapshot.status.input);
+  // Headphone volume is set on the headphones; this control only changes Yamaha's speakers.
+  const volumeLabel = t(real && snapshot.bluetooth?.enabled ? 'speakerVolume' : 'volume');
   return <Screen tab header={<View style={styles.spread}>
     <Pressable accessibilityRole="button" accessibilityLabel={t('rooms')} onPress={() => router.navigate('/(tabs)/rooms')} style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', gap: 2 }}>
       <View style={[styles.row, { gap: 4 }]}><Copy kind="heading" lines={1} style={{ flexShrink: 1 }}>{real ? snapshot.model : t(activeRoom === 'studio' ? 'studio' : 'livingRoom')}</Copy><Icon name="chevron" color={colors.muted} size={16}/></View>
@@ -45,6 +47,7 @@ export default function Listen() {
           <View style={{ flex: 1, minWidth: 0 }}><Button label={sourceLabel(locale, snapshot.status.input, input?.name ?? snapshot.status.input)} accessibilityLabel={t('sources')} icon="music" onPress={() => setSourcesOpen(true)}/></View>
           {input?.tuner && snapshot.features.tuner?.presets && <View style={{ flex: 1, minWidth: 0 }}><RadioPresetsButton/></View>}
           {input && canBrowseSource(input) && <View style={{ flex: 1, minWidth: 0 }}><Button label={t('browse')} accessibilityLabel={t('browseSource')} pending={busy} disabled={disabled || !on} onPress={() => router.push({ pathname: '/browse', params: { input: input.id } })}/></View>}
+          {real && snapshot.features.bluetoothOutput && <View style={{ flex: 1, minWidth: 0 }}><Button label={t('headphones')} accessibilityLabel={t('bluetoothHeadphones')} onPress={() => router.push('/bluetooth')}/></View>}
         </View>
       </View>
       <View style={{ flex: landscape ? 1 : undefined, minWidth: 0, justifyContent: 'center', gap: 8 }}>
@@ -58,11 +61,11 @@ export default function Listen() {
         <Card>
           <View style={[styles.row, { gap: 8 }]}>
             <IconButton size={44} name={snapshot.status.mute ? 'muted' : 'volume'} label={t(snapshot.status.mute ? 'unmute' : 'mute')} pending={busy} working={pendingCommand?.type === 'mute'} disabled={disabled || !on || !canMute} onPress={() => void execute({ type: 'mute', value: !snapshot.status.mute })}/>
-            <View style={{ flex: 1, minWidth: 0 }}><Copy kind="heading" lines={1}>{volume ?? '—'}{maxVolume !== undefined && <Copy kind="small"> / {maxVolume}</Copy>}</Copy><Copy kind="label" lines={1}>{t('volume')}</Copy></View>
-            <IconButton size={44} name="minus" label={`${t('volume')} −`} pending={busy} working={pendingCommand?.type === 'volume' && pendingCommand.value === 'down'} disabled={disabled || !on || !canVolume || volume! <= range!.min} onPress={() => void execute({ type: 'volume', value: 'down' })}/>
-            <IconButton size={44} name="plus" label={`${t('volume')} +`} pending={busy} working={pendingCommand?.type === 'volume' && pendingCommand.value === 'up'} disabled={disabled || !on || !canVolume || volume! >= maxVolume!} onPress={() => void execute({ type: 'volume', value: 'up' })}/>
+            <View style={{ flex: 1, minWidth: 0 }}><Copy kind="heading" lines={1}>{volume ?? '—'}{maxVolume !== undefined && <Copy kind="small"> / {maxVolume}</Copy>}</Copy><Copy kind="label" lines={1}>{volumeLabel}</Copy></View>
+            <IconButton size={44} name="minus" label={`${volumeLabel} −`} pending={busy} working={pendingCommand?.type === 'volume' && pendingCommand.value === 'down'} disabled={disabled || !on || !canVolume || volume! <= range!.min} onPress={() => void execute({ type: 'volume', value: 'down' })}/>
+            <IconButton size={44} name="plus" label={`${volumeLabel} +`} pending={busy} working={pendingCommand?.type === 'volume' && pendingCommand.value === 'up'} disabled={disabled || !on || !canVolume || volume! >= maxVolume!} onPress={() => void execute({ type: 'volume', value: 'up' })}/>
           </View>
-          <View accessible accessibilityRole="progressbar" accessibilityLabel={t('volume')} accessibilityValue={{ min: range?.min, max: maxVolume, now: volume }} style={{ height: 4, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' }}>
+          <View accessible accessibilityRole="progressbar" accessibilityLabel={volumeLabel} accessibilityValue={{ min: range?.min, max: maxVolume, now: volume }} style={{ height: 4, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' }}>
             <View style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%`, height: '100%', backgroundColor: colors.accent }}/>
           </View>
           <Copy kind="small" lines={1} style={{ minHeight: 19 }}>{pendingCommand?.type === 'volume' && real ? t('pending') : ' '}</Copy>

@@ -3,7 +3,7 @@ export { CommandRejectedError } from './command-error';
 export { demoController } from './demo';
 export { privateIPv4 } from './parsers';
 export { discoverMusicCast, discoveryPrefix, type DiscoveredDevice, type DiscoveredCompanion } from './discovery';
-export type { Command, Controller, Features, Power, Playback, Snapshot, Source, Status, Track } from './types';
+export type { BluetoothCommand, BluetoothDevice, BluetoothState, Command, Controller, Features, Power, Playback, Snapshot, Source, Status, Track } from './types';
 
 export { DeviceSession, type DeviceState } from './session';
 export { BrowseError, canBrowseSource, validBrowseAction, validBrowseIndex, type BrowseErrorCode } from './browsing';

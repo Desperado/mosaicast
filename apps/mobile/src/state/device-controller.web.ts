@@ -5,7 +5,7 @@ export function deviceController(host: string): Controller {
   if (!privateIPv4(host)) throw new Error('Invalid address');
   async function request<T>(action: 'read' | 'command' | 'browse' | 'browse-action', data: Record<string, unknown> = {}): Promise<T> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), action.startsWith('browse') ? 120000 : 30000);
+    const timer = setTimeout(() => controller.abort(), action.startsWith('browse') ? 120000 : 60000);
     try {
       const response = await fetch(`http://127.0.0.1:8092/${action}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host, ...data }),

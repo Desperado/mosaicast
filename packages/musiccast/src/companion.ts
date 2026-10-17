@@ -42,7 +42,8 @@ export function validCommand(value: unknown): value is Command {
   if (Object.keys(c).length !== 2 || !('type' in c) || !('value' in c)) return false;
   if (c.type === 'input') return typeof c.value === 'string' && /^[a-z][a-z0-9_]{0,47}$/.test(c.value);
   if (c.type === 'tunerPreset') return typeof c.value === 'number' && Number.isInteger(c.value) && c.value >= 1 && c.value <= 256;
-  const values: Record<string, unknown[]> = { power: ['on', 'standby'], volume: ['up', 'down'], mute: [true, false], playback: ['play', 'pause', 'previous', 'next'], tunerBand: ['fm', 'dab'], tunerTune: ['up', 'down', 'auto_up', 'auto_down'], tunerService: ['previous', 'next'], tunerScan: ['start', 'cancel'] };
+  if (c.type === 'bluetoothConnect') return typeof c.value === 'string' && /^[\da-f]{12}$/i.test(c.value);
+  const values: Record<string, unknown[]> = { power: ['on', 'standby'], volume: ['up', 'down'], mute: [true, false], playback: ['play', 'pause', 'previous', 'next'], tunerBand: ['fm', 'dab'], tunerTune: ['up', 'down', 'auto_up', 'auto_down'], tunerService: ['previous', 'next'], tunerScan: ['start', 'cancel'], bluetoothOutput: [true, false], bluetoothScan: ['start'], bluetoothDisconnect: ['disconnect'] };
   return typeof c.type === 'string' && Object.prototype.hasOwnProperty.call(values, c.type) && values[c.type].includes(c.value);
 }
 

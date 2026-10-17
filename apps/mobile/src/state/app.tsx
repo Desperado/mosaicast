@@ -9,7 +9,7 @@ import { PhoneCompanion, type PeerStatus } from './phone-companion';
 import { deviceController } from './device-controller';
 import { useHardwareVolume } from './hardware-volume';
 import { lifecycleChange } from './lifecycle';
-import { defaults, parsePreferences, preferenceWriter, preferencesKey, resolveAppearance, resolveLanguage, type Preferences } from './preferences';
+import { defaults, parsePreferences, preferenceWriter, preferencesKey, resolveAppearance, resolveLanguage, updateHiddenBluetoothDevices, type Preferences } from './preferences';
 
 export const demoRooms = ['livingRoom', 'studio'] as const;
 type DemoRoom = typeof demoRooms[number];
@@ -95,19 +95,34 @@ function useAppState() {
     }
   }, [ready, session]);
 
+  // Lifecycle applies in every room: a background companion must stop with its native listener.
   useEffect(() => {
-    let foreground = AppState.currentState !== 'background' && AppState.currentState !== 'inactive';
     const subscription = AppState.addEventListener('change', state => {
-      const change = lifecycleChange(state);
-      foreground = change.foreground;
-      if (change.active !== undefined) session.setActive(change.active);
-      if (foreground) void session.refresh(false);
+      const { active } = lifecycleChange(state);
+      if (active !== undefined) session.setActive(active);
     });
-    const timer = setInterval(() => {
-      if (!companionMode.current && foreground && (Platform.OS !== 'web' || !document.hidden)) void session.refresh(false);
-    }, 8000);
-    return () => { clearInterval(timer); subscription.remove(); session.disconnect(); };
+    return () => { subscription.remove(); session.disconnect(); };
   }, [session]);
+
+  useEffect(() => {
+    if (activeRoom !== 'device') return;
+    let foreground = AppState.currentState !== 'background' && AppState.currentState !== 'inactive';
+    // A phone companion receives coordinator updates; only direct connections poll Yamaha.
+    const poll = () => {
+      if (!companionMode.current && foreground && (Platform.OS !== 'web' || !document.hidden)) void session.poll();
+    };
+    const subscription = AppState.addEventListener('change', state => {
+      foreground = lifecycleChange(state).foreground;
+      if (foreground) poll();
+    });
+    if (Platform.OS === 'web') document.addEventListener('visibilitychange', poll);
+    const timer = setInterval(poll, 1000);
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+      if (Platform.OS === 'web') document.removeEventListener('visibilitychange', poll);
+    };
+  }, [activeRoom, session]);
 
   async function savePreferences(patch: Partial<Omit<Preferences, 'version'>>): Promise<boolean> {
     if (!ready || storageError === 'loadError') return false;
@@ -212,6 +227,14 @@ function useAppState() {
     void savePreferences({ mode: 'demo', demoStarted: true });
   }
 
+  function hideBluetoothDevice(address?: string) {
+    const host = session.state.host;
+    if (!host || session.state.phase !== 'connected' || session.state.busy) return;
+    // Disconnect first. Hiding must never conceal an active audio connection.
+    if (address && (!/^[\da-f]{12}$/i.test(address) || session.state.snapshot?.bluetooth?.connected?.address === address.toUpperCase())) return;
+    return savePreferences({ hiddenBluetoothDevices: updateHiddenBluetoothDevices(preferencesRef.current.hiddenBluetoothDevices, host, address) });
+  }
+
   const locale = resolveLanguage(preferences.language, locales[0]?.languageCode);
   const theme = resolveAppearance(preferences.appearance, systemTheme);
   const real = activeRoom === 'device';
@@ -223,7 +246,7 @@ function useAppState() {
     pendingCommand: real ? deviceState.pendingCommand : pendingCommands[activeRoom],
     refreshing: real && !!deviceState.refreshing,
     commandError: real ? deviceState.error : commandError === activeRoom ? 'error' as const : undefined,
-    deviceState, real, connect, connectCompanion, peerStatus, approvePeer: () => phoneCompanion.current?.approve(), cancelPeer: () => phoneCompanion.current?.cancelPairing(), takePeerControl: () => phoneCompanion.current?.takeControl(), startDemo, hardwareVolumeUnavailable, refresh: () => session.refresh(),
+    deviceState, real, connect, connectCompanion, peerStatus, approvePeer: () => phoneCompanion.current?.approve(), cancelPeer: () => phoneCompanion.current?.cancelPairing(), takePeerControl: () => phoneCompanion.current?.takeControl(), startDemo, hideBluetoothDevice, hardwareVolumeUnavailable, refresh: () => session.refresh(),
     browseState: real ? deviceState : demoBrowse[activeRoom] ?? {}, loadBrowse, browseAction,
     controlsDisabled: real && (deviceState.phase !== 'connected' || deviceState.needsRefresh),
     execute, locale, theme, colors: themes[theme], t: (key: TranslationKey) => translate(locale, key) };

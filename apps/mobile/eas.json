@@ -9,6 +9,9 @@
       "node": "24.18.0",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "APP_VARIANT": "development"
       }
     },
     "simulator": {
@@ -20,7 +23,10 @@
     "production": {
       "node": "24.18.0",
       "distribution": "store",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production"
+      }
     }
   },
   "submit": {

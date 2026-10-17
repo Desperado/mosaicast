@@ -1,5 +1,5 @@
 import { parseTunerFeatures } from './tuner';
-import type { Features, Status, Track } from './types';
+import type { BluetoothDevice, BluetoothState, Features, Status, Track } from './types';
 
 export function privateIPv4(host: string): boolean {
   if (!/^(?:0|[1-9]\d{0,2})(?:\.(?:0|[1-9]\d{0,2})){3}$/.test(host)) return false;
@@ -34,8 +34,31 @@ export function parseFeatures(data: Record<string, unknown>): Features {
   return {
     controls: strings(zone.func_list), sources, tuner: parseTunerFeatures(data.tuner),
     connectivity: strings(system.func_list).filter(id => labels[id]).map(id => labels[id]),
+    bluetoothOutput: strings(system.func_list).includes('bluetooth_tx_setting'),
     volumeRange: min !== undefined && max !== undefined && step !== undefined && min < max && step > 0 ? { min, max, step } : undefined,
   };
+}
+
+export function parseBluetoothDevice(value: unknown): BluetoothDevice {
+  const data = record(value);
+  if (typeof data.address !== 'string' || !/^[\da-f]{12}$/i.test(data.address)) throw new Error('Invalid Bluetooth address.');
+  return {
+    address: data.address.toUpperCase(), name: text(data.name).slice(0, 128).trim(),
+    type: ['loudspeaker', 'headphone', 'handsfree_device'].includes(String(data.type)) ? data.type as BluetoothDevice['type'] : 'unknown',
+  };
+}
+
+export function parseBluetoothInfo(data: Record<string, unknown>): BluetoothState {
+  if (typeof data.bluetooth_tx_setting !== 'boolean') throw new Error('Bluetooth output status is unavailable.');
+  const device = record(data.bluetooth_device);
+  if (typeof device.connected !== 'boolean') throw new Error('Bluetooth connection status is unavailable.');
+  return { enabled: data.bluetooth_tx_setting, connected: device.connected ? parseBluetoothDevice(device) : undefined, updating: false, devices: [] };
+}
+
+export function parseBluetoothList(data: Record<string, unknown>): Pick<BluetoothState, 'updating' | 'devices'> {
+  if (typeof data.updating !== 'boolean' || !Array.isArray(data.device_list) || data.device_list.length > 128) throw new Error('Bluetooth device list is unavailable.');
+  const devices = data.device_list.map(parseBluetoothDevice);
+  return { updating: data.updating, devices: devices.filter((device, index) => devices.findIndex(item => item.address === device.address) === index) };
 }
 
 export function parseStatus(data: Record<string, unknown>): Status {
