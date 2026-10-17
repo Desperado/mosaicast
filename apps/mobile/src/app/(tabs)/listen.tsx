@@ -6,6 +6,7 @@ import { useApp } from '../../state/app';
 import { Button, Card, Copy, DemoBadge, IconButton, Mosaic, Screen, styles } from '../../components/ui';
 import { Icon } from '../../components/icon';
 import { Sources } from '../../components/sources';
+import { BluetoothOutput } from '../../components/bluetooth-output';
 
 export default function Listen() {
   const { colors, t, locale, snapshot, activeRoom, busy, commandError, execute, real, deviceState, refresh, controlsDisabled } = useApp();
@@ -21,6 +22,8 @@ export default function Listen() {
   const canMute = snapshot.features.controls.includes('mute') && typeof snapshot.status.mute === 'boolean';
   const ratio = range && maxVolume !== undefined && volume !== undefined && maxVolume > range.min ? (volume - range.min) / (maxVolume - range.min) : 0;
   const input = snapshot.features.sources.find(source => source.id === snapshot.status.input);
+  const bluetoothOutput = real && snapshot.bluetooth?.enabled;
+  const volumeLabel = t(bluetoothOutput ? 'speakerVolume' : 'volume');
   return <Screen>
     <View style={styles.spread}>
       <Pressable accessibilityRole="button" accessibilityLabel={t('rooms')} onPress={() => router.navigate('/(tabs)/rooms')} style={{ flex: 1, minHeight: 48, justifyContent: 'center', gap: 2 }}>
@@ -56,15 +59,16 @@ export default function Listen() {
     <Card>
       <View style={[styles.spread, { flexWrap: 'wrap' }]}>
         <IconButton name={snapshot.status.mute ? 'muted' : 'volume'} label={t(snapshot.status.mute ? 'unmute' : 'mute')} disabled={disabled || !on || !canMute} onPress={() => void execute({ type: 'mute', value: !snapshot.status.mute })}/>
-        <View style={{ flex: 1, minWidth: 72 }}><Copy kind="title">{volume ?? '—'}{maxVolume !== undefined && <Copy kind="small"> {t('of')} {maxVolume}</Copy>}</Copy><Copy kind="label">{t('volume')}</Copy></View>
-        <IconButton name="minus" label={`${t('volume')} −`} disabled={disabled || !on || !canVolume || volume! <= range!.min} onPress={() => void execute({ type: 'volume', value: 'down' })}/>
-        <IconButton name="plus" label={`${t('volume')} +`} disabled={disabled || !on || !canVolume || volume! >= maxVolume!} onPress={() => void execute({ type: 'volume', value: 'up' })}/>
+        <View style={{ flex: 1, minWidth: 72 }}><Copy kind="title">{volume ?? '—'}{maxVolume !== undefined && <Copy kind="small"> {t('of')} {maxVolume}</Copy>}</Copy><Copy kind="label">{volumeLabel}</Copy></View>
+        <IconButton name="minus" label={`${volumeLabel} −`} disabled={disabled || !on || !canVolume || volume! <= range!.min} onPress={() => void execute({ type: 'volume', value: 'down' })}/>
+        <IconButton name="plus" label={`${volumeLabel} +`} disabled={disabled || !on || !canVolume || volume! >= maxVolume!} onPress={() => void execute({ type: 'volume', value: 'up' })}/>
       </View>
-      <View accessible accessibilityRole="progressbar" accessibilityLabel={t('volume')} accessibilityValue={{ min: range?.min, max: maxVolume, now: volume }} style={{ height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
+      <View accessible accessibilityRole="progressbar" accessibilityLabel={volumeLabel} accessibilityValue={{ min: range?.min, max: maxVolume, now: volume }} style={{ height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
         <View style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%`, height: '100%', backgroundColor: colors.accent }}/>
       </View>
-      <Copy kind="small">{t(real ? 'liveVolume' : 'demoVolume')}</Copy>
+      <Copy kind="small">{t(bluetoothOutput ? 'bluetoothVolumeHint' : real ? 'liveVolume' : 'demoVolume')}</Copy>
     </Card>
+    <BluetoothOutput/>
     <Card><Copy kind="heading">{t(real ? 'liveCapabilities' : 'capabilities')}</Copy><Copy kind="small">{t(real ? 'liveCapabilitiesHint' : 'capabilitiesHint')}</Copy>
       <Copy>{snapshot.features.connectivity.map(label => connectivityLabel(locale, label)).join(' · ')}</Copy>
     </Card>

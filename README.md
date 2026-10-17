@@ -58,6 +58,8 @@ npm run bundle:check   # Expo iOS, Android, and web production bundles
 CI runs both checks on pull requests and pushes to main. The export checks
 iOS, Android, and web bundles; it does not compile or install native binaries.
 See [native builds](docs/native-builds.md) to produce an Android APK or iOS preview.
+Local and preview builds install as **Mosaicast Dev**, alongside the official
+TestFlight/store app. The `production` EAS profile keeps the official app identity.
 
 The dependency audit currently reports upstream advisories. See
 [dependency status](docs/dependency-status.md) for the findings and release follow-up.
@@ -87,8 +89,25 @@ on actual iOS/Android builds. Remote power-on needs Network Standby enabled on
 the Yamaha. Selecting an input does not sign into or browse a music service.
 
 Writes are sent once. If a result is uncertain, explicitly refresh status before
-another command. Foreground polling every eight seconds never replays commands.
+another command. Routine foreground refreshes wait 30 seconds after the last
+read or command, stay silent, and never replay commands. Polling pauses in the
+background, hidden browser tabs, and demo rooms. Failed reads back off to one,
+then two minutes. Only a requested Bluetooth search polls every three seconds,
+for at most 30 seconds, before returning to the normal interval.
 Next/previous acknowledgement means accepted, not a confirmed track transition.
+
+On Yamaha devices that advertise Bluetooth transmission, **Listen → Bluetooth
+headphones** lets you enable output, search, connect and disconnect. Select a
+source other than Bluetooth, enable output, put the headphones in pairing mode,
+then search and select them. Audio goes directly from Yamaha to the headphones.
+The list comes from Yamaha's last search; ordinary refresh never starts a search.
+Search acknowledgement is distinct from a confirmed connection. These controls
+have automated coverage; a user has confirmed a headphone connection on hardware.
+Headphone volume must be adjusted on the headphones; the Yamaha volume/mute
+controls affect its speakers. **Remove from this app** hides disconnected old
+headphones locally for the selected Yamaha, including after restarting the app.
+**Restore removed headphones** shows them again. Yamaha's documented API does
+not expose pairing deletion, so removal does not erase its pairing records.
 
 ## Implementation order
 

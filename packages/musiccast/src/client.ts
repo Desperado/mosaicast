@@ -1,5 +1,5 @@
-import { parseFeatures, parseStatus, parseTrack, privateIPv4, record } from './parsers';
-import type { Command, Controller, Features, Snapshot, Status } from './types';
+import { parseBluetoothInfo, parseBluetoothList, parseFeatures, parseStatus, parseTrack, privateIPv4, record } from './parsers';
+import type { BluetoothCommand, BluetoothState, Command, Controller, Features, Snapshot, Status } from './types';
 
 type Fetch = typeof globalThis.fetch;
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -14,9 +14,9 @@ export class MusicCastClient implements Controller {
     if (!privateIPv4(host)) throw new Error('Enter a private IPv4 address, such as 192.168.1.50.');
   }
 
-  private async request(route: string, params: Record<string, string> = {}): Promise<Record<string, unknown>> {
+  private async request(route: string, params: Record<string, string> = {}, timeout = 5000): Promise<Record<string, unknown>> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
+    const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const query = new URLSearchParams(params).toString();
       const response = await this.fetcher(`http://${this.host}/YamahaExtendedControl/v1/${route}${query ? `?${query}` : ''}`, { signal: controller.signal, redirect: 'error', credentials: 'omit', cache: 'no-store' });
@@ -45,14 +45,71 @@ export class MusicCastClient implements Controller {
     return this.snapshot(parseStatus(await this.request('main/getStatus')));
   }
 
-  private async snapshot(status: Status): Promise<Snapshot> {
+  private async readBluetooth(): Promise<BluetoothState> {
+    const bluetooth = parseBluetoothInfo(await this.request('system/getBluetoothInfo'));
+    return bluetooth.enabled ? { ...bluetooth, ...parseBluetoothList(await this.request('system/getBluetoothDeviceList')) } : bluetooth;
+  }
+
+  private async snapshot(status: Status, bluetooth?: BluetoothState): Promise<Snapshot> {
     const features = this.features!;
     let track: Snapshot['track'], trackUnavailable = false;
     if (status.power === 'on' && features.sources.some(source => source.id === status.input && source.networkPlayer)) {
       try { track = parseTrack(await this.request('netusb/getPlayInfo'), status, this.host); }
       catch { trackUnavailable = true; }
     }
-    return { model: this.model, features, status, track, trackUnavailable };
+    if (features.bluetoothOutput && status.power === 'on' && !bluetooth) {
+      try { bluetooth = await this.readBluetooth(); }
+      catch { /* Optional Bluetooth failures must not disable the main player. */ }
+    }
+    return { model: this.model, features, status, track, trackUnavailable, bluetooth };
+  }
+
+  private async executeBluetooth(command: BluetoothCommand, status: Status): Promise<Snapshot> {
+    if (!this.features?.bluetoothOutput) throw new Error('This Yamaha does not support Bluetooth output.');
+    if (status.power !== 'on') throw new Error('Power on the Yamaha before using Bluetooth output.');
+    const before = await this.readBluetooth();
+    if (command.type !== 'bluetoothOutput' && !before.enabled) throw new Error('Enable Bluetooth output first.');
+    if (status.input === 'bluetooth' && !(command.type === 'bluetoothOutput' && !command.value) && command.type !== 'bluetoothDisconnect') throw new Error('Choose another input before using Bluetooth output.');
+    let route: string, params: Record<string, string> = {};
+    let confirms: (state: BluetoothState) => boolean;
+    switch (command.type) {
+      case 'bluetoothOutput':
+        if (before.enabled === command.value) return this.snapshot(status, before);
+        route = 'system/setBluetoothTxSetting'; params = { enable: String(command.value) };
+        confirms = state => state.enabled === command.value;
+        break;
+      case 'bluetoothScan':
+        if (before.updating) throw new Error('Wait for the Bluetooth search to finish.');
+        route = 'system/updateBluetoothDeviceList'; confirms = () => true;
+        break;
+      case 'bluetoothConnect': {
+        if (!/^[\da-f]{12}$/i.test(command.value)) throw new Error('Invalid Bluetooth address.');
+        const address = command.value.toUpperCase();
+        if (before.connected?.address === address) return this.snapshot(status, before);
+        if (before.updating) throw new Error('Wait for the Bluetooth search to finish.');
+        if (!before.devices.some(device => device.address === address)) throw new Error('Search again; this Bluetooth device is no longer available.');
+        route = 'system/connectBluetoothDevice'; params = { address };
+        confirms = state => state.connected?.address === address;
+        break;
+      }
+      case 'bluetoothDisconnect':
+        if (!before.connected) return this.snapshot(status, before);
+        route = 'system/disconnectBluetoothDevice'; confirms = state => !state.connected;
+        break;
+    }
+    try {
+      // Bluetooth connection can take longer than an ordinary status request.
+      // Dispatch once; only the observation reads below may be repeated.
+      await this.request(route, params, command.type === 'bluetoothConnect' ? 20000 : 5000);
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt) await this.delay(500 * attempt);
+        const bluetooth = await this.readBluetooth();
+        if (confirms(bluetooth)) return this.snapshot(status, bluetooth);
+      }
+    } catch {
+      throw new Error('Bluetooth command result is uncertain; refresh before trying again.');
+    }
+    throw new Error('The Yamaha did not confirm the Bluetooth change. Refresh before trying again.');
   }
 
   async execute(command: Command): Promise<Snapshot> {
@@ -60,8 +117,10 @@ export class MusicCastClient implements Controller {
     this.writing = true;
     try {
       if (!this.features) await this.read();
-      const features = command.type === 'input' ? await this.capabilities() : this.features!;
+      const bluetoothCommand = command.type === 'bluetoothOutput' || command.type === 'bluetoothScan' || command.type === 'bluetoothConnect' || command.type === 'bluetoothDisconnect';
+      const features = command.type === 'input' || bluetoothCommand ? await this.capabilities() : this.features!;
       const status = parseStatus(await this.request('main/getStatus'));
+      if (command.type === 'bluetoothOutput' || command.type === 'bluetoothScan' || command.type === 'bluetoothConnect' || command.type === 'bluetoothDisconnect') return await this.executeBluetooth(command, status);
       let route: string, params: Record<string, string>, confirms: ((value: Status) => boolean) | undefined;
       if (command.type === 'playback') {
         if (status.power !== 'on' || !features.sources.some(source => source.id === status.input && source.networkPlayer)) throw new Error('Playback controls are available for powered-on network / USB sources only.');

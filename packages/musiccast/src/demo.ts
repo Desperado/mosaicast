@@ -26,6 +26,7 @@ export function demoController(): Controller {
     mode: 'demo',
     async read() { return copy(); },
     async execute(command: Command) {
+      if (command.type === 'bluetoothOutput' || command.type === 'bluetoothScan' || command.type === 'bluetoothConnect' || command.type === 'bluetoothDisconnect') throw new Error('Bluetooth output is not simulated in demo mode.');
       const status = { ...state.status };
       switch (command.type) {
         case 'power': status.power = command.value; break;

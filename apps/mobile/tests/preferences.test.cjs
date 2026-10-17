@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { defaults, parsePreferences, resolveLanguage, resolveAppearance, preferenceWriter } = require('../src/state/preferences.ts');
+const { defaults, parsePreferences, resolveLanguage, resolveAppearance, preferenceWriter, bluetoothDeviceKey, updateHiddenBluetoothDevices } = require('../src/state/preferences.ts');
 
 test('saved preferences restore only known fields and reject corrupt or unknown versions', () => {
   assert.deepEqual(parsePreferences(null), defaults);
@@ -47,4 +47,26 @@ test('rapid changes persist in order even when an earlier write fails', async ()
   await rejected;
   await b;
   assert.deepEqual(calls, ['en', 'uk']);
+});
+
+test('removed headphones stay removed after reload and can be restored for one Yamaha only', () => {
+  const first = '192.168.1.40', other = '192.168.1.41';
+  const address = 'aabbccddeeff';
+  let hidden = updateHiddenBluetoothDevices([], first, address);
+  hidden = updateHiddenBluetoothDevices(hidden, other, address);
+  hidden = updateHiddenBluetoothDevices(hidden, first, address.toUpperCase());
+  assert.equal(hidden.length, 2);
+  const restored = parsePreferences(JSON.stringify({ ...defaults, hiddenBluetoothDevices: hidden }));
+  assert.ok(restored.hiddenBluetoothDevices.includes(bluetoothDeviceKey(first, address)));
+  assert.deepEqual(updateHiddenBluetoothDevices(restored.hiddenBluetoothDevices, first), [bluetoothDeviceKey(other, address)]);
+  assert.deepEqual(parsePreferences('{"version":1,"mode":"device","address":"192.168.1.40"}'), { ...defaults, mode: 'device', address: first });
+});
+
+test('removed headphone records reject malformed values and stay bounded', () => {
+  const valid = '192.168.1.40/AABBCCDDEEFF';
+  const preferences = parsePreferences(JSON.stringify({ ...defaults, hiddenBluetoothDevices: [null, {}, '../bad', '192.168.1.40/invalid', valid.toLowerCase(), valid] }));
+  assert.deepEqual(preferences.hiddenBluetoothDevices, [valid]);
+  const many = Array.from({ length: 600 }, (_, index) => bluetoothDeviceKey('192.168.1.40', index.toString(16).padStart(12, '0')));
+  assert.equal(parsePreferences(JSON.stringify({ ...defaults, hiddenBluetoothDevices: many })).hiddenBluetoothDevices.length, 512);
+  assert.equal(updateHiddenBluetoothDevices(many, '192.168.1.41', '001122334455').length, 512);
 });

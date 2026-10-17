@@ -6,7 +6,7 @@ import { themes } from '@mosaicast/design';
 import { translate, type TranslationKey } from '@mosaicast/i18n';
 import { demoController, DeviceSession, type DeviceState, type Command, type Snapshot } from '@mosaicast/musiccast';
 import { deviceController } from './device-controller';
-import { defaults, parsePreferences, preferenceWriter, preferencesKey, resolveAppearance, resolveLanguage, type Preferences } from './preferences';
+import { defaults, parsePreferences, preferenceWriter, preferencesKey, resolveAppearance, resolveLanguage, updateHiddenBluetoothDevices, type Preferences } from './preferences';
 
 export const demoRooms = ['livingRoom', 'studio'] as const;
 type DemoRoom = typeof demoRooms[number];
@@ -82,16 +82,25 @@ function useAppState() {
   }, [ready, session]);
 
   useEffect(() => {
+    if (activeRoom !== 'device') return;
     let foreground = AppState.currentState !== 'background' && AppState.currentState !== 'inactive';
+    const poll = () => {
+      if (foreground && (Platform.OS !== 'web' || !document.hidden)) void session.poll();
+    };
     const subscription = AppState.addEventListener('change', state => {
       foreground = state === 'active';
-      if (foreground) void session.refresh(false);
+      if (foreground) poll();
     });
-    const timer = setInterval(() => {
-      if (foreground && (Platform.OS !== 'web' || !document.hidden)) void session.refresh(false);
-    }, 8000);
-    return () => { clearInterval(timer); subscription.remove(); session.disconnect(); };
-  }, [session]);
+    if (Platform.OS === 'web') document.addEventListener('visibilitychange', poll);
+    const timer = setInterval(poll, 1000);
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+      if (Platform.OS === 'web') document.removeEventListener('visibilitychange', poll);
+    };
+  }, [activeRoom, session]);
+
+  useEffect(() => () => session.disconnect(), [session]);
 
   async function savePreferences(patch: Partial<Omit<Preferences, 'version'>>): Promise<boolean> {
     if (!ready || storageError === 'loadError') return false;
@@ -154,13 +163,21 @@ function useAppState() {
     void savePreferences({ mode: 'demo', demoStarted: true });
   }
 
+  function hideBluetoothDevice(address?: string) {
+    const host = session.state.host;
+    if (!host || session.state.phase !== 'connected' || session.state.busy) return;
+    // Disconnect first. Hiding must never conceal an active audio connection.
+    if (address && (!/^[\da-f]{12}$/i.test(address) || session.state.snapshot?.bluetooth?.connected?.address === address.toUpperCase())) return;
+    return savePreferences({ hiddenBluetoothDevices: updateHiddenBluetoothDevices(preferencesRef.current.hiddenBluetoothDevices, host, address) });
+  }
+
   const locale = resolveLanguage(preferences.language, locales[0]?.languageCode);
   const theme = resolveAppearance(preferences.appearance, systemTheme);
   const real = activeRoom === 'device';
   return { ready, preferences, savePreferences, retryLoadPreferences, resetPreferences, storageError, activeRoom, setActiveRoom, snapshots,
     snapshot: real ? deviceState.snapshot : snapshots[activeRoom], busy: real ? deviceState.busy : busy[activeRoom] ?? false,
     commandError: real ? deviceState.error : commandError === activeRoom ? 'error' as const : undefined,
-    deviceState, real, connect, startDemo, refresh: () => session.refresh(),
+    deviceState, real, connect, startDemo, hideBluetoothDevice, refresh: () => session.refresh(),
     controlsDisabled: real && (deviceState.phase !== 'connected' || deviceState.needsRefresh),
     execute, locale, theme, colors: themes[theme], t: (key: TranslationKey) => translate(locale, key) };
 }

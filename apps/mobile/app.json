@@ -16,7 +16,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "io.github.desperado.mosaicast",
-      "buildNumber": "2"
+      "buildNumber": "10"
     },
     "android": {
       "permissions": [
