@@ -10,7 +10,8 @@ const { lifecycleChange } = require('../src/state/lifecycle.ts');
 
 const musiccast = path.resolve(__dirname, '../../../packages/musiccast/dist/index.js');
 const stubs = {
-  expo: 'export const requireOptionalNativeModule = () => globalThis.peerNative;',
+  // The module reads its native peer once; delegate so each test supplies its own.
+  expo: 'export const requireOptionalNativeModule = () => new Proxy({}, { get: (_, key) => globalThis.peerNative[key] });',
   './discovery': "export const localSearchAddress = async () => '192.168.1.10';",
   './pairing-store': 'export const loadPairing = async () => undefined; export const savePairing = async () => {};',
   '@mosaicast/musiccast': `import { createRequire } from 'node:module'; const m = createRequire(${JSON.stringify(musiccast)})(${JSON.stringify(musiccast)});
@@ -70,4 +71,31 @@ test('returning to the foreground restarts the listener without waiting for a Re
     companion.close(); companion.setActive(true); await settle();
     assert.deepEqual(native.calls.at(-1), ['stop']);
   } finally { globalThis.fetch = fetch; delete globalThis.peerNative; }
+});
+
+test('a background stop during startup polling never installs the retired controller or polling timer', async () => {
+  const native = nativePeer(), live = new Set();
+  globalThis.peerNative = native;
+  const { fetch, setInterval: realSet, clearInterval: realClear } = globalThis;
+  let release, reads = 0;
+  const held = new Promise(resolve => { release = resolve; });
+  globalThis.fetch = async () => { if (++reads === 1) await held; throw new Error('offline'); };
+  globalThis.setInterval = (callback, ms, ...args) => { const handle = realSet(callback, ms, ...args); if (ms === 2000) live.add(handle); return handle; };
+  globalThis.clearInterval = handle => { live.delete(handle); return realClear(handle); };
+  try {
+    const { PhoneCompanion } = require('../src/state/phone-companion.ts');
+    const companion = new PhoneCompanion('192.168.1.20', () => {});
+    const first = companion.read();
+    while (reads === 0) await settle();
+    companion.setActive(false); companion.setActive(true); await settle();
+    assert.equal(native.calls.filter(([name]) => name === 'start').length, 2);
+    assert.equal(live.size, 1);
+    release(); await assert.rejects(first, /Inactive/); await settle();
+    assert.equal(live.size, 1);
+    companion.close();
+    assert.equal(live.size, 0);
+  } finally {
+    for (const handle of live) realClear(handle);
+    Object.assign(globalThis, { fetch, setInterval: realSet, clearInterval: realClear }); delete globalThis.peerNative;
+  }
 });

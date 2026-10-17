@@ -145,3 +145,56 @@ test('phone-only explicit takeover invalidates state and cannot reuse a prior me
   await assert.rejects(phone.execute(volume), e => e.code === 'reconcile'); await phone.reconcile(); await phone.execute(volume);
   assert.equal(f.writes, 1); restarted.close(); await assert.rejects(phone.execute(volume)); assert.equal(f.writes, 1);
 });
+
+function localYamaha() {
+  const state = { writes: 0, volume: 11 };
+  const respond = route => {
+    if (route === 'main/setVolume') { state.writes++; state.volume++; }
+    const data = route === 'system/getFeatures' ? { system: { input_list: [{ id: 'cd', play_info_type: 'none' }], func_list: [] }, zone: [{ id: 'main', func_list: ['volume'], input_list: ['cd'], range_step: [{ id: 'volume', min: 0, max: 30, step: 1 }] }] } : route === 'main/getStatus' ? { power: 'on', input: 'cd', volume: state.volume } : { model_name: 'Fixture' };
+    return { ok: true, json: async () => ({ response_code: 0, ...data }) };
+  };
+  return { state, respond };
+}
+
+test('a lost hand-off reply makes the TV Refresh before its own writes resume', async () => {
+  const f = fixture(), record = await paired(f), yamaha = localYamaha(); let loseYield = false;
+  const fetcher = async (address, options) => {
+    if (!String(address).includes(':8095/')) return yamaha.respond(new URL(address).pathname.split('/v1/')[1]);
+    const result = await f.fetcher(address, options);
+    if (loseYield && new URL(address).pathname === '/peer/exchange') { loseYield = false; throw new Error('lost reply'); }
+    return result;
+  };
+  f.online = false;
+  const tv = createTVPeerController(record, random, () => [], fetcher, f.now);
+  try {
+    await tv.read(); f.advance(60001); await tv.read(); await tv.reconcile(); await tv.execute(volume);
+    assert.equal(yamaha.state.writes, 1);
+    // The phone receives the yield, but its reply is lost: the phone may now write.
+    f.online = true; loseYield = true; f.advance(5001); await tv.observe();
+    assert.equal(f.service.canControl, true); assert.equal(loseYield, false);
+    f.online = false; f.advance(60001); await tv.observe();
+    await assert.rejects(tv.execute(volume), e => e.code === 'reconcile'); assert.equal(yamaha.state.writes, 1);
+    await tv.reconcile(); await tv.execute(volume); assert.equal(yamaha.state.writes, 2);
+  } finally { tv.close(); }
+});
+
+test('heartbeats keep phone authority during a slow TV menu operation without replaying it', async t => {
+  const f = fixture(), record = await paired(f), gate = Promise.withResolvers(); let browses = 0;
+  f.adapter.browse = async (input, index) => { browses++; await gate.promise; return { input, token: '', layer: 0, title: 'Deezer', index, total: 0, items: [] }; };
+  const tv = createTVPeerController(record, random, () => [], f.fetcher, f.now);
+  try {
+    await tv.read(); await tv.reconcile(); assert.equal(f.service.canControl, true);
+    t.mock.timers.enable({ apis: ['setInterval'] });
+    const browse = tv.browse('deezer', 0);
+    for (let i = 0; i < 5; i++) {
+      f.advance(4000); t.mock.timers.tick(4000);
+      for (let j = 0; j < 20; j++) await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.equal(f.service.canControl, true, 'a 20s menu read must not expire the 12s phone lease');
+    gate.resolve(); assert.equal((await browse).title, 'Deezer'); assert.equal(browses, 1);
+    await tv.observe(); assert.equal(f.service.canControl, true);
+    // Heartbeats stop with the operation, so a vanished TV still loses authority.
+    f.advance(4000); t.mock.timers.tick(4000); f.advance(8001);
+    assert.equal(f.service.canControl, false);
+  } finally { t.mock.timers.reset(); tv.close(); }
+});

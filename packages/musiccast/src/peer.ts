@@ -114,7 +114,8 @@ export class PhonePeerService {
   }
 }
 
-async function peerJSON(url: string, path: string, body: unknown, fetcher: typeof fetch, timeout = 45000): Promise<unknown> {
+const peerOperationTimeout = 110000;
+async function peerJSON(url: string, path: string, body: unknown, fetcher: typeof fetch, timeout: number): Promise<unknown> {
   if (!peerURL(url)) throw new Error('Invalid peer address');
   const abort = new AbortController(), timer = setTimeout(() => abort.abort(), timeout);
   try {
@@ -155,7 +156,9 @@ export async function connectPeer(record: PeerRecord, random: PeerRandom, fetche
   return async request => {
     const sequence = ++counter;
     const envelope = sealPeer(record.key, { id: record.id, epoch: session, counter: sequence }, { ...(yielded ? {} : { yield: true }), ...(request ? { request } : {}) }, random, 'request');
-    const reply = await peerJSON(record.url, '/peer/exchange', envelope, fetcher) as PeerPacket;
+    // A menu action may chain two 35s menu reads with other Yamaha requests (~100s);
+    // observations, including the yield that makes the phone read Yamaha, are shorter.
+    const reply = await peerJSON(record.url, '/peer/exchange', envelope, fetcher, request ? peerOperationTimeout : 30000) as PeerPacket;
     if (reply.id !== envelope.id || reply.epoch !== session || reply.counter !== sequence) throw new Error('Invalid response');
     const value = openPeer(record.key, reply, 'response') as CompanionReply;
     if (!value?.state || value.state.version !== 1 || !['observed', 'accepted', 'rejected', 'uncertain'].includes(value.outcome)) throw new Error('Invalid response');

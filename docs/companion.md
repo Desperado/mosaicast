@@ -44,9 +44,13 @@ Only one iPhone and one TV per pairing are supported.
 | Neither open | Yamaha continues playback; no coordinator runs. |
 
 A phone authority lease lasts 12 seconds and is renewed by authenticated TV
-traffic. Every Yamaha mutation is checked again immediately before dispatch,
-including mutations after a slow preflight read. A late heartbeat cannot revive
-an expired lease. TV recovery waits longer than the lease and in-flight request
+traffic. While a TV operation is pending, the TV sends observation-only
+heartbeats every 4 seconds, so a slow menu read does not expire the lease. TV
+operations wait up to 110 seconds for the phone's reply (a menu action can chain
+two 35-second menu reads). Every Yamaha mutation is checked again immediately
+before dispatch, including mutations after a slow preflight read. A late
+heartbeat cannot revive an expired lease. If a TV hand-off reply is lost, the TV
+also requires Refresh before its own writes resume. TV recovery waits longer than the lease and in-flight request
 windows. Network loss never causes an automatic write replay.
 
 Two disconnected devices cannot distinguish an app being closed from a network

@@ -34,8 +34,9 @@ export function createTVPeerController(record: PeerRecord, random: PeerRandom, u
           try {
             const candidate = await connectPeer({ ...record, url }, random, fetcher);
             if (!active || closed) throw new Error('Inactive');
-            // A failed yield response is uncertain: stop local writes and wait.
-            recoverAt = now() + 60000;
+            // A failed yield response is uncertain: stop local writes, wait, and
+            // require an explicit Refresh because the phone may have written meanwhile.
+            recoverAt = now() + 60000; local.invalidate();
             const observed = await candidate();
             remote = candidate; return observed;
           } catch { if (!active || closed) throw new Error('Inactive'); }
@@ -43,12 +44,16 @@ export function createTVPeerController(record: PeerRecord, random: PeerRandom, u
       } finally { probing = false; }
     }
     if (remote) {
-      try { return await remote(request); }
+      const current = remote;
+      // The phone lease is 12s but a menu action may take far longer. Observation-only
+      // heartbeats keep it alive; they carry no operation, so nothing is replayed.
+      const heartbeat = request ? setInterval(() => { if (remote === current && active && !closed) void current().catch(() => {}); }, 4000) : undefined;
+      try { return await current(request); }
       catch {
-        remote = undefined; local = coordinator(); recoverAt = now() + 60000;
+        if (remote === current) { remote = undefined; local = coordinator(); recoverAt = now() + 60000; }
         // Never forward a failed remote operation into the local coordinator.
         throw new Error('Peer disconnected. Refresh first.');
-      }
+      } finally { if (heartbeat) clearInterval(heartbeat); }
     }
     if (request && request.operation.type !== 'observe' && now() < recoverAt) return { sequence: request.sequence, outcome: 'rejected', code: 'reconcile', state: { ...local.state, freshness: 'stale', needsReconcile: true } };
     if (!request) { if (now() >= nextPoll) { nextPoll = now() + 2000; await local.poll(); } return { sequence: local.lastSequence('frame'), outcome: 'observed', state: local.state }; }

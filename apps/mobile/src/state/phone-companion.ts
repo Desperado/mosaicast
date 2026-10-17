@@ -49,6 +49,8 @@ export class PhoneCompanion implements Controller {
       await native.start(address);
       if (generation !== this.generation) throw new Error('Inactive');
       await coordinator.poll();
+      // A stop during this read retired the generation; never install its controller or timer.
+      if (generation !== this.generation) throw new Error('Inactive');
       this.controller = new CompanionController(this.host, service.localExchange);
       this.timer = setInterval(() => { if (this.active) { void coordinator.poll(); this.status(); } }, 2000);
       this.status(); return this.controller;

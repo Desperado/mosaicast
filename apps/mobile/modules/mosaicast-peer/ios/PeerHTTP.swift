@@ -54,7 +54,8 @@ final class PeerHTTP {
     connections[id] = connection
     connection.start(queue: queue)
     queue.asyncAfter(deadline: .now() + 5) { if !self.responding.contains(id) { self.finish(id) } }
-    queue.asyncAfter(deadline: .now() + 50) { self.finish(id) }
+    // Outlasts the TV's 110s operation deadline; uploads still get only 5s.
+    queue.asyncAfter(deadline: .now() + 120) { self.finish(id) }
     receive(id, Data())
   }
   private func finish(_ id: String) { connections.removeValue(forKey: id)?.cancel(); responding.remove(id) }
