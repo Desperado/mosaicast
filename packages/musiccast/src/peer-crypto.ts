@@ -23,6 +23,11 @@ export function peerSharedKey(secret: Uint8Array, otherPublic: string, transcrip
   try { return bytesToHex(hkdf(sha256, shared, sha256(utf8ToBytes(transcript)), 'mosaicast-peer-root-v1', 32)); }
   finally { shared.fill(0); }
 }
+// The QR secret authorizes one invitation; the stored key is bound to this phone boot.
+export function peerQRKey(secret: string, id: string, epoch: string) {
+  if (!hex(secret, 32) || !hex(id, 16) || !hex(epoch, 16)) throw new Error('Invalid QR code');
+  return bytesToHex(hkdf(sha256, hexToBytes(secret), sha256(utf8ToBytes(`${id}:${epoch}`)), 'mosaicast-peer-qr-v1', 32));
+}
 export function peerSAS(key: string): string {
   if (!hex(key, 32)) throw new Error('Invalid pairing');
   const bytes = hkdf(sha256, hexToBytes(key), undefined, 'mosaicast-peer-compare-v1', 4);

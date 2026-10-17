@@ -19,9 +19,37 @@ the audio through its existing accounts.
 4. Compare the six digits on both screens. Approve on the phone, then confirm on
    the TV only if they match. Choose Refresh before sending device commands.
 
+### Mobile QR support (build 12)
+
+The mobile connection screen now opens phone + TV setup as its primary action.
+On an updated TV that displays a pairing QR, choose **Scan TV QR code** on iPhone.
+The camera runs only while that screen is open. Allow camera access when asked.
+If the code does not include Yamaha's address, enter its private IPv4 address
+before finishing. Keep both apps open until the TV confirms saving.
+
+This change updates the mobile app and its shared protocol only. The TV app in
+this repository still uses the address-and-digits steps above; choose **Connect
+using an address** on iPhone for that version. QR display and reliable TV storage
+must be added to the TV app separately. Mobile support does not fix a failing
+Tizen Key Manager write.
+
+The QR invitation contains a random ID and 256-bit secret, expires after five
+minutes, and is accepted only after a deliberate scan. The phone publishes its
+invitation ID in discovery, never its secret. An updated TV finds that ID,
+proves possession of the QR secret through encrypted `/peer/qr/prepare`, and
+receives the receiver address. HKDF derives a pairing key bound to the phone's
+boot identifier. The TV must save and read back its candidate record before
+calling `/peer/pair/confirm`; the iPhone saves to device-only SecureStore and
+reads it back before acknowledging. A failed phone save appears on iPhone.
+Only the pairing acknowledgement can be requested again after a lost reply;
+this never retries a Yamaha command. Successful saved pairs use the existing
+session protocol after restarting without scanning again.
+
+Never log, capture or commit QR contents, pairing records or encrypted packets.
+
 The TV searches its private `/24`, with 12 read-only probes at a time and a
 1.2-second timeout per address. Discovery reveals only a service/version, address
-and random boot identifier. It does not pair or issue Yamaha commands. After
+and random boot identifier, plus an invitation ID while QR setup is active. It does not pair or issue Yamaha commands. After
 pairing the TV tries the saved phone address and searches every 30 seconds while
 active, so a changed phone IP can be found without pairing again. The phone sees
 its TV through the authenticated connection; it does not scan for a TV listener.

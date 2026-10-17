@@ -1,6 +1,11 @@
 export const en = {
+  scanTVQR: 'Scan TV QR code', qrBody: 'On Frame, choose Connect phone + TV. Scan its QR code here. This iPhone securely remembers your pairing. A TV update is needed to display the QR code.',
+  cameraUnavailable: 'Could not open the camera. Check camera permission in Settings and try again.', cameraPermission: 'Allow camera access to scan the QR code on your TV.', allowCamera: 'Allow camera', cameraSettings: 'Open camera settings',
+  qrInvalid: 'This QR code is invalid or expired. Show a new code on the TV and scan again.', qrWaiting: 'QR scanned. Keep both apps open while the TV saves the connection.',
+  phoneSaveFailed: 'Could not save pairing on this iPhone. Keep both apps open and choose Try again on the TV.',
+  qrReceiver: 'Enter your Yamaha’s private IP address to finish connecting.', manualPairing: 'Connect using an address', qrNativeRequired: 'QR scanning requires the new iPhone app. You can use address pairing below.',
   hostPhone: 'Connect and find TV', phoneDiscoverable: 'On the TV, choose Connect phone + TV. It finds this phone automatically. If needed, enter this phone address:',
-  peerWaiting: 'Waiting for your TV to pair…', peerPaired: 'TV paired. Refresh Yamaha after a coordinator change.',
+  peerWaiting: 'Waiting for your TV to pair…', peerPaired: 'Connection saved on this iPhone. The TV will confirm when both copies are saved.',
   compareScreens: 'Check that these six digits match on your phone and TV. Approve on both screens only if they match.', codesMatch: 'The codes match', waitingTVConfirm: 'Confirm the matching code on TV',
   peerWaitingAuthority: 'Waiting for the TV to hand over control. If the TV app is closed, confirm below, then choose Refresh on Listen. Only take control when the TV app is closed.',
   tvClosedTakeControl: 'TV app is closed — take control', peerNativeRequired: 'Phone + TV needs a new iPhone development build with the local listener. Expo Go, Android and browser preview cannot host it.',
@@ -88,8 +93,13 @@ export const en = {
 export type TranslationKey = keyof typeof en;
 export type Locale = 'en' | 'uk';
 export const uk: Record<TranslationKey, string> = {
+  scanTVQR: 'Сканувати QR-код телевізора', qrBody: 'На Frame виберіть «Підключити телефон і ТВ». Скануйте його QR-код тут. iPhone запам’ятає сполучення в захищеному сховищі. Щоб показати QR-код, потрібно оновити застосунок ТВ.',
+  cameraUnavailable: 'Не вдалося відкрити камеру. Перевірте дозвіл у налаштуваннях і спробуйте ще раз.', cameraPermission: 'Дозвольте доступ до камери, щоб сканувати QR-код на телевізорі.', allowCamera: 'Дозволити камеру', cameraSettings: 'Відкрити налаштування камери',
+  qrInvalid: 'QR-код недійсний або його термін минув. Покажіть новий код на ТВ і скануйте ще раз.', qrWaiting: 'QR відскановано. Не закривайте застосунки, поки ТВ зберігає з’єднання.',
+  phoneSaveFailed: 'Не вдалося зберегти пару на iPhone. Не закривайте застосунки й виберіть «Спробувати ще раз» на ТВ.',
+  qrReceiver: 'Введіть локальну IP-адресу Yamaha, щоб завершити підключення.', manualPairing: 'Підключити за адресою', qrNativeRequired: 'Для сканування QR потрібна нова версія застосунку iPhone. Нижче можна підключитися за адресою.',
   hostPhone: 'Підключити й знайти ТВ', phoneDiscoverable: 'На телевізорі виберіть «Підключити телефон і ТВ». Він автоматично знайде цей телефон. За потреби введіть його адресу:',
-  peerWaiting: 'Очікуємо сполучення з телевізором…', peerPaired: 'ТВ сполучено. Оновіть стан Yamaha після зміни координатора.',
+  peerWaiting: 'Очікуємо сполучення з телевізором…', peerPaired: 'З’єднання збережено на iPhone. ТВ підтвердить збереження на обох пристроях.',
   compareScreens: 'Перевірте, що ці шість цифр однакові на телефоні й ТВ. Підтвердьте на обох екранах лише якщо вони збігаються.', codesMatch: 'Коди збігаються', waitingTVConfirm: 'Підтвердьте код на ТВ',
   peerWaitingAuthority: 'Очікуємо передачі керування від ТВ. Якщо застосунок на ТВ закрито, підтвердьте нижче, потім оновіть стан на екрані «Слухати». Перебирайте керування лише коли застосунок на ТВ закрито.',
   tvClosedTakeControl: 'Застосунок на ТВ закрито — перебрати керування', peerNativeRequired: 'Для телефону й ТВ потрібна нова збірка iPhone з локальним слухачем. Expo Go, Android і браузер не можуть його запустити.',

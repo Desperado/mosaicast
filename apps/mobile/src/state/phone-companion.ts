@@ -3,7 +3,7 @@ import { CompanionController, CompanionCoordinator, MusicCastClient, PhonePeerSe
 import { localSearchAddress } from './discovery';
 import { loadPairing, savePairing } from './pairing-store';
 
-export type PeerStatus = { url?: string; comparison?: string; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean };
+export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; saveFailed?: boolean };
 type PeerRequest = { id: string; method: string; path: string; body: string };
 type PeerNative = {
   addListener(event: 'request', listener: (event: PeerRequest) => void): { remove(): void };
@@ -23,10 +23,12 @@ export class PhoneCompanion implements Controller {
   private active = true;
   private closed = false;
   private generation = 0;
+  private saveFailed = false;
+  private saving: Promise<void> = Promise.resolve();
   constructor(readonly host: string, private readonly notify: (status: PeerStatus) => void) {}
   private status() {
     const service = this.service;
-    this.notify(service ? { url: service.url, ...service.pairing, paired: service.paired, waiting: service.waitingForTV } : {});
+    this.notify(service ? { url: service.url, ...service.pairing, paired: service.paired, saveFailed: this.saveFailed, waiting: service.waitingForTV } : {});
   }
   private ensure() {
     if (!this.active || this.closed) return Promise.reject(new Error('Inactive'));
@@ -35,11 +37,17 @@ export class PhoneCompanion implements Controller {
     this.ready = (async () => {
       if (!native) { this.notify({ unavailable: true }); throw new Error('An iPhone development build is required'); }
       await this.draining;
+      await this.saving.catch(() => {});
       const address = await localSearchAddress(), record = await loadPairing();
       if (generation !== this.generation) throw new Error('Inactive');
       const random: PeerRandom = length => Uint8Array.from(native.randomHex(length).match(/../g)!, byte => parseInt(byte, 16));
       const coordinator = new CompanionCoordinator(new MusicCastClient(this.host, peerDeviceFetch(() => !!this.service?.canControl && generation === this.generation)), native.randomHex(16));
-      const service = new PhonePeerService(this.host, `http://${address}:8095`, coordinator, random, record, async value => { await savePairing(value); this.status(); });
+      const service = new PhonePeerService(this.host, `http://${address}:8095`, coordinator, random, record, async value => {
+        const saving = savePairing(value); this.saving = saving;
+        try { await saving; this.saveFailed = false; }
+        catch (error) { this.saveFailed = true; throw error; }
+        finally { if (generation === this.generation) this.status(); }
+      });
       this.service = service; this.coordinator = coordinator;
       this.subscription = native.addListener('request', event => {
         if (generation !== this.generation) return;
@@ -70,6 +78,7 @@ export class PhoneCompanion implements Controller {
     this.timer = undefined; this.ready = undefined;
     native?.stop();
   }
+  async acceptInvitation(text: string) { await this.ensure(); this.service!.acceptInvitation(text); this.status(); }
   approve() { this.service?.approve(); this.status(); }
   cancelPairing() { this.service?.cancelPairing(); this.status(); }
   takeControl() { this.service?.takeControl(); this.status(); }

@@ -13,7 +13,7 @@ const stubs = {
   // The module reads its native peer once; delegate so each test supplies its own.
   expo: 'export const requireOptionalNativeModule = () => new Proxy({}, { get: (_, key) => globalThis.peerNative[key] });',
   './discovery': "export const localSearchAddress = async () => '192.168.1.10';",
-  './pairing-store': 'export const loadPairing = async () => undefined; export const savePairing = async () => {};',
+  './pairing-store': 'export const loadPairing = async () => globalThis.peerStore?.record; export const savePairing = async value => globalThis.peerStore?.save(value);',
   '@mosaicast/musiccast': `import { createRequire } from 'node:module'; const m = createRequire(${JSON.stringify(musiccast)})(${JSON.stringify(musiccast)});
 export const { CompanionController, CompanionCoordinator, MusicCastClient, PhonePeerService, peerDeviceFetch } = m;`,
 };
@@ -98,4 +98,65 @@ test('a background stop during startup polling never installs the retired contro
     for (const handle of live) realClear(handle);
     Object.assign(globalThis, { fetch, setInterval: realSet, clearInterval: realClear }); delete globalThis.peerNative;
   }
+});
+
+
+test('scanned QR accepts authenticated pairing and exposes a failed phone save until an explicit retry succeeds', async () => {
+  const native = nativePeer(), statuses = [], replies = new Map(); let listener, sequence = 0, saves = 0, failSave = true;
+  native.addListener = (_event, callback) => { listener = callback; return { remove() { listener = undefined; } }; };
+  native.respond = (id, status, body) => { replies.get(id)({ ok: status === 200, text: async () => body }); replies.delete(id); };
+  globalThis.peerNative = native;
+  globalThis.peerStore = { save(value) { saves++; if (failSave) throw new Error('storage unavailable'); this.record = value; } };
+  const fetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  const { createPeerInvitation, beginQRPairing } = require(musiccast);
+  const { PhoneCompanion } = require('../src/state/phone-companion.ts');
+  const companion = new PhoneCompanion('192.168.1.20', status => statuses.push(status));
+  const fetcher = (address, options = {}) => new Promise(resolve => {
+    const id = String(++sequence); replies.set(id, resolve);
+    listener({ id, method: options.method ?? 'GET', path: new URL(address).pathname, body: options.body ?? '' });
+  });
+  try {
+    const qr = createPeerInvitation(n => new Uint8Array(randomBytes(n)), '192.168.1.20');
+    await companion.acceptInvitation(qr.text);
+    const pending = await beginQRPairing('http://192.168.1.10:8095', qr.invitation, n => new Uint8Array(randomBytes(n)), fetcher);
+    await assert.rejects(pending.confirm()); await settle();
+    assert.equal(statuses.at(-1).saveFailed, true);
+    assert.equal(statuses.at(-1).paired, false);
+    assert.equal(saves, 1);
+    failSave = false;
+    await pending.confirm(); await settle();
+    assert.equal(statuses.at(-1).saveFailed, false);
+    assert.equal(statuses.at(-1).paired, true);
+    assert.equal(saves, 2);
+  } finally { companion.close(); globalThis.fetch = fetch; delete globalThis.peerNative; delete globalThis.peerStore; }
+});
+
+test('foreground restart waits for an in-flight pairing save before loading the remembered pair', async () => {
+  const native = nativePeer(), statuses = [], replies = new Map(), saving = Promise.withResolvers(), started = Promise.withResolvers(); let listener, sequence = 0;
+  native.addListener = (_event, callback) => { listener = callback; return { remove() { listener = undefined; } }; };
+  native.respond = (id, status, body) => { replies.get(id)({ ok: status === 200, text: async () => body }); replies.delete(id); };
+  globalThis.peerNative = native;
+  globalThis.peerStore = { async save(value) { started.resolve(); await saving.promise; this.record = value; } };
+  const fetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  const { createPeerInvitation, beginQRPairing } = require(musiccast);
+  const { PhoneCompanion } = require('../src/state/phone-companion.ts');
+  const companion = new PhoneCompanion('192.168.1.20', status => statuses.push(status));
+  const fetcher = (address, options = {}) => new Promise(resolve => {
+    const id = String(++sequence); replies.set(id, resolve);
+    listener({ id, method: options.method ?? 'GET', path: new URL(address).pathname, body: options.body ?? '' });
+  });
+  try {
+    const qr = createPeerInvitation(n => new Uint8Array(randomBytes(n)), '192.168.1.20');
+    await companion.acceptInvitation(qr.text);
+    const pending = await beginQRPairing('http://192.168.1.10:8095', qr.invitation, n => new Uint8Array(randomBytes(n)), fetcher);
+    const confirmation = assert.rejects(pending.confirm());
+    await started.promise;
+    companion.setActive(false); companion.setActive(true); await settle();
+    assert.equal(native.calls.filter(([name]) => name === 'start').length, 1);
+    saving.resolve(); await confirmation; await settle();
+    assert.equal(native.calls.filter(([name]) => name === 'start').length, 2);
+    assert.equal(statuses.at(-1).paired, true);
+  } finally { saving.resolve(); companion.close(); globalThis.fetch = fetch; delete globalThis.peerNative; delete globalThis.peerStore; }
 });

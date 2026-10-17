@@ -63,12 +63,12 @@ export function discoverMusicCast(localAddress: string, options: {
   }, options);
 }
 
-export type DiscoveredCompanion = { url: string };
+export type DiscoveredCompanion = { url: string; invitation?: string };
 
 export function discoverPeers(localAddress: string, options: {
   signal: AbortSignal; onDevice: (device: DiscoveredCompanion) => void; fetcher?: typeof globalThis.fetch;
 }): Promise<DiscoveredCompanion[]> {
   return discoverLocal(localAddress, ':8095/.well-known/mosaicast-peer', (data, host) => {
-    if (data.service === 'mosaicast-peer' && data.version === 1 && data.url === `http://${host}:8095` && typeof data.epoch === 'string' && /^[a-f0-9]{32}$/.test(data.epoch)) return { url: data.url as string };
+    if (data.service === 'mosaicast-peer' && data.version === 1 && data.url === `http://${host}:8095` && typeof data.epoch === 'string' && /^[a-f0-9]{32}$/.test(data.epoch)) return { url: data.url as string, ...(typeof data.invitation === 'string' && /^[a-f0-9]{32}$/.test(data.invitation) ? { invitation: data.invitation } : {}) };
   }, options);
 }

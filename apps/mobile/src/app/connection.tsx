@@ -77,19 +77,19 @@ function ConnectionForm({ t, preferences, connect, deviceState, startDemo }: Pic
     }
   }
   return <Screen header={<BackHeader title={t('connection')}/>} footer={<View style={styles.smallStack}>
-    <Button label={t('companion')} onPress={() => router.push('/companion')}/>
     <View style={[styles.row, { gap: 8 }]}>
       <View style={{ flex: 1 }}><Button label={t('tryDemo')} disabled={busy} onPress={() => { cancelSearch(); startDemo(); router.replace('/(tabs)/listen'); }}/></View>
       <View style={{ flex: 1 }}><Button label={t('connectionHelp')} onPress={() => { Keyboard.dismiss(); setInfoOpen(true); }}/></View>
     </View>
   </View>}>
+    <Button label={t('companion')} primary disabled={busy} onPress={() => { cancelSearch(); router.push('/companion'); }}/>
     <View style={styles.smallStack}>
       <Copy>{t('ipAddress')}</Copy>
       <IPAddressInput value={address} busy={busy} invalid={invalid} onSubmit={() => void submit()}
         onChange={value => { cancelSearch(); setAddress(value); setInvalid(false); setFailed(false); }}/>
       {invalid && <Copy kind="small" accessibilityRole="alert">{t('invalidIP')}</Copy>}
       {failed && <Copy accessibilityRole="alert">{t(deviceState.error ?? 'connectError')}</Copy>}
-      <Button label={t(busy ? 'connecting' : 'connectByIP')} primary disabled={busy || !address.trim()} onPress={() => void submit()}/>
+      <Button label={t(busy ? 'connecting' : 'connectByIP')} disabled={busy || !address.trim()} onPress={() => void submit()}/>
     </View>
     {Platform.OS !== 'web' && <>
       <Button label={t(searchState === 'searching' ? 'cancelSearch' : 'findDevices')} disabled={busy}

@@ -1,5 +1,5 @@
 import type { Controller } from '@mosaicast/musiccast';
-export type PeerStatus = { url?: string; comparison?: string; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean };
+export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; saveFailed?: boolean };
 export class PhoneCompanion implements Controller {
   readonly mode = 'device' as const;
   constructor(readonly host: string, notify: (status: PeerStatus) => void) { notify({ unavailable: true }); }
@@ -8,5 +8,6 @@ export class PhoneCompanion implements Controller {
   async execute(): ReturnType<Controller['execute']> { return this.unavailable(); }
   async browse(): ReturnType<Controller['browse']> { return this.unavailable(); }
   async browseAction(): ReturnType<Controller['browseAction']> { return this.unavailable(); }
+  async acceptInvitation(_text: string) { this.unavailable(); }
   approve() {} cancelPairing() {} takeControl() {} close() {}
 }

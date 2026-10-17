@@ -181,12 +181,16 @@ function useAppState() {
     return success && session.state.host === host && session.state.phase === 'connected' && preferencesRef.current.mode === 'device';
   }
 
-  async function connectCompanion(host: string) {
+  async function connectCompanion(host: string, invitation?: string) {
     companionMode.current = true;
     const success = await session.connect(host);
     if (success) {
+      if (!await savePreferences({ address: host, mode: 'device', demoStarted: true, connection: 'companion' })) return false;
+      if (invitation) {
+        if (!phoneCompanion.current) throw new Error('Phone companion unavailable');
+        await phoneCompanion.current.acceptInvitation(invitation);
+      }
       setActiveRoom('device');
-      await savePreferences({ address: host, mode: 'device', demoStarted: true, connection: 'companion' });
     }
     return success && session.state.host === host && session.state.phase === 'connected' && preferencesRef.current.mode === 'device';
   }
