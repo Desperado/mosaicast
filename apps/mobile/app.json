@@ -2,6 +2,7 @@
   "expo": {
     "name": "Mosaicast",
     "slug": "mosaicast",
+    "icon": "./assets/icon.png",
     "scheme": "mosaicast",
     "version": "0.1.0",
     "orientation": "default",
@@ -9,21 +10,20 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Mosaicast connects to your Yamaha on your home network to read playback and control music.",
+        "NSLocalNetworkUsageDescription": "Mosaicast connects your Yamaha, iPhone and Samsung TV on your local network to read playback and control music.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
-        },
-        "ITSAppUsesNonExemptEncryption": false
+        }
       },
       "bundleIdentifier": "io.github.desperado.mosaicast",
-      "buildNumber": "2"
+      "buildNumber": "7"
     },
     "android": {
       "permissions": [
         "android.permission.INTERNET"
       ],
       "package": "io.github.desperado.mosaicast",
-      "versionCode": 2
+      "versionCode": 5
     },
     "web": {
       "bundler": "metro",
@@ -32,7 +32,8 @@
     "plugins": [
       "expo-router",
       "expo-localization",
-      "./plugins/local-network.cjs"
+      "./plugins/local-network.cjs",
+      "expo-secure-store"
     ],
     "extra": {
       "router": {},

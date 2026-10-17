@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Frame Music</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="themes.css">
+  <script src="$WEBAPIS/webapis/webapis.js"></script>
+  <script defer src="bundle.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">f</span><span>frame<span class="brand-light">music</span></span></div>
+    <nav id="navigation" aria-label="Main navigation">
+      <button id="home" class="nav-button selected"><span>▥</span> <span id="browse-label">Deezer</span></button>
+      <button id="now-playing" class="nav-button"><span>♫</span> Now playing</button>
+      <button id="browse-sources" class="nav-button"><span>▤</span> Sources</button>
+      <button id="settings" class="nav-button"><span>⚙</span> Connection</button>
+      <button id="help" class="nav-button" aria-haspopup="dialog"><span>?</span> Help</button>
+    </nav>
+    <div class="device"><span class="device-dot"></span><strong id="device-name">Preview mode</strong><small id="device-description"></small></div>
+  </aside>
+  <main id="main-content">
+    <div class="artist-atmosphere" aria-hidden="true" hidden id="artist-atmosphere">
+      <img class="artist-orbits" src="assets/artist-orbits.svg" alt="">
+      <img id="artist-cover" alt="" hidden>
+    </div>
+    <header id="appearance">
+      <span class="service" id="service-label">DEEZER</span>
+      <div class="header-actions">
+        <button id="open-themes" class="quiet theme-trigger" aria-haspopup="dialog">Appearance · <span id="theme-current">Warm Gallery</span></button>
+        <span id="connection-badge" class="badge" hidden></span>
+      </div>
+    </header>
+    <div class="screen-heading">
+    <section class="intro">
+      <p class="eyebrow" id="breadcrumb"></p>
+      <div class="title-row"><h1 id="menu-title">Deezer</h1><button id="back" class="quiet" hidden>← Back</button></div>
+    </section>
+    <div id="power-controls" class="power-controls" role="group" aria-label="Yamaha power controls">
+      <span id="power-state" class="yamaha-status" data-power="unknown" role="status" title="Yamaha power status unavailable">
+        <span class="yamaha-logo"><img src="assets/yamaha.svg" alt="" aria-hidden="true"></span>
+        <span class="power-light" aria-hidden="true"></span>
+        <span id="power-description" class="sr-only">Yamaha power status unavailable</span>
+      </span>
+      <button id="power-on" class="quiet" aria-label="Power on Yamaha" disabled>Power on</button>
+      <button id="power-off" class="quiet" aria-label="Put Yamaha in standby" disabled>Standby</button>
+    </div>
+    </div>
+    <div id="toolbar" class="toolbar"><span id="menu-count"></span><div><button id="open-track" class="quiet">Now playing</button><button id="sources" class="quiet">Sources</button><button id="refresh" class="quiet">↻ Refresh</button><button id="page-prev" class="quiet" hidden>← Previous</button><button id="page-next" class="quiet" hidden>Next →</button></div></div>
+    <div id="browse-panel" class="browse-layout">
+      <aside class="menu-preview" aria-label="Focused menu item">
+        <div class="preview-art" aria-hidden="true"><span id="preview-icon">♫</span></div>
+        <p class="eyebrow">IN FOCUS</p><h2 id="preview-title">Deezer</h2>
+      </aside>
+      <section id="menu" class="menu-grid" aria-label="Deezer menu"></section>
+    </div>
+    <section id="track-panel" class="track-panel" hidden aria-label="Current song details">
+      <div class="track-overview">
+        <div class="album-art detail-art"><div class="sun"></div><div class="landscape"></div><img id="detail-cover" alt="" hidden></div>
+        <div class="track-facts">
+          <h2 id="detail-title">Choose something to listen to</h2>
+          <dl><dt>Artist</dt><dd id="detail-artist">—</dd><dt>Album</dt><dd id="detail-album">—</dd><dt>Playback</dt><dd id="detail-time">—</dd></dl>
+          <p id="cover-status" class="source-note"></p>
+        </div>
+      </div>
+      <section id="tuner-panel" hidden aria-label="Radio controls"><h2>Radio</h2><p id="tuner-status" class="source-note" role="status"></p><div id="tuner-controls" class="source-actions"></div></section>
+      <div class="lyrics-heading"><h2>Lyrics</h2><span id="lyrics-source" class="source-note"></span></div>
+      <p id="lyrics-status" class="source-note" role="status"></p>
+      <pre id="lyrics" class="lyrics" hidden></pre>
+      <div id="lyrics-controls" class="lyrics-controls" hidden><button id="lyrics-up" class="quiet" aria-label="Scroll lyrics up">↑ Lyrics</button><button id="lyrics-down" class="quiet" aria-label="Scroll lyrics down">↓ Lyrics</button></div>
+    </section>
+    <section id="sources-panel" hidden aria-label="Yamaha sources and capabilities">
+      <p id="source-error" class="source-note" role="alert"></p>
+      <div id="source-list" class="menu-grid"></div>
+      <h2 class="capability-title">Your Yamaha supports</h2>
+      <ul id="capability-list" class="capability-list"></ul>
+    </section>
+    <div id="message" class="message" role="status" aria-live="polite"></div>
+  </main>
+  <footer id="player" class="player">
+    <div class="album-art" aria-hidden="true"><div class="sun"></div><div class="landscape"></div><img id="player-cover" alt="" hidden></div>
+    <div class="track"><span id="play-source" class="eyebrow">EXAMPLE MUSIC</span><strong id="track-title">A slower kind of Sunday</strong><span id="track-artist">The Quiet Hours</span></div>
+    <div class="transport"><button id="previous" aria-label="Previous track">Ⅰ◀</button><button id="toggle-play" class="play" aria-label="Play or pause">▶</button><button id="next" aria-label="Next track">▶Ⅰ</button></div>
+    <div class="sound" role="group" aria-label="Yamaha sound controls">
+      <span id="volume-level">Volume unavailable</span>
+      <div><button id="volume-down" aria-label="Decrease Yamaha volume" disabled>−</button><button id="mute" aria-label="Mute Yamaha" aria-pressed="false" disabled>Mute</button><button id="volume-up" aria-label="Increase Yamaha volume" disabled>+</button></div>
+    </div>
+    <div class="player-state"><span id="play-state">Ready to listen</span></div>
+  </footer>
+  <div id="overlay" class="overlay" hidden>
+    <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-description">
+      <button id="close-dialog" class="close" aria-label="Close dialog">×</button>
+      <p class="eyebrow">FRAME MUSIC</p><h2 id="dialog-title">Connect your Yamaha</h2><p id="dialog-description"></p>
+      <form id="dialog-form"><label id="input-label" for="dialog-input">Local IP address</label><input id="dialog-input" autocomplete="off" maxlength="280"><div id="companion-fields" hidden><p id="companion-discovery-status" role="status"></p><div id="companion-results"></div><button id="find-companions" type="button">Search again</button><p>Compare on both screens</p><p id="pairing-code" role="status" aria-live="polite"></p></div><button class="primary" id="submit-dialog" type="submit">Connect</button></form>
+      <button id="pair-companion" class="quiet">Connect phone + TV</button>
+      <button id="takeover-menu" class="quiet" hidden>Take over menu</button>
+      <button id="use-demo" class="quiet">Preview without connecting</button>
+      <div id="help-sections" class="help-sections" hidden>
+        <div class="help-topics" role="group" aria-label="Help topic">
+          <button id="help-remote" class="quiet" aria-pressed="true">Remote</button><button id="help-playback" class="quiet" aria-pressed="false">Playback</button><button id="help-connection" class="quiet" aria-pressed="false">Connection</button><button id="help-artwork" class="quiet" aria-pressed="false">Artwork &amp; lyrics</button>
+        </div>
+        <section id="help-section-remote"><h3>Remote</h3><p>Tap the circle directions to move focus; OK opens a collection or plays a track. Back returns to the previous screen.</p><p>Hold Left / Right for the previous / next page. Inside an artist collection, hold Up / Down for the previous / next artist. Artist shortcuts need a collection opened through an Artists list.</p><p><span id="remote-track-hint">CH ↑ Next / CH ↓ Previous</span> · <span id="remote-volume-hint">Volume ± / Mute · Yamaha</span></p></section>
+        <section id="help-section-playback" hidden><h3>Playback &amp; sources</h3><p>Audio plays on your Yamaha. The Play key can play a focused collection when supported.</p><p class="source-note">Browse opens a menu without changing playback. Switch input selects a source with network/USB autoplay disabled; it sends no power command. Streaming services may require an existing account and may no longer be available in your region.</p><p class="source-note">Sources shows the inputs and capabilities reported by your Yamaha. Pairing, network setup, CD controls and multiroom group setup are managed with MusicCast or the Yamaha remote. Radio controls in companion mode use the capabilities reported by your Yamaha.</p></section>
+        <section id="help-section-connection" hidden><h3>Connection &amp; power</h3><p class="source-note">Standby stops listening. Remote power on requires Network Standby enabled in MusicCast or the Yamaha settings.</p><p id="demo-hint">Preview · example music</p></section>
+        <section id="help-section-artwork" hidden><h3>Artwork &amp; lyrics</h3><p class="source-note">Artist, song and album come from your Yamaha. Lyrics lookups send the artist, song, album and duration to LRCLIB; no account is needed.</p></section>
+      </div>
+      <div id="surface-options" class="surface-options" role="group" aria-label="Surface appearance" hidden>
+        <button id="surface-glass" class="quiet" aria-pressed="true">Glass</button>
+        <button id="surface-solid" class="quiet" aria-pressed="false">Solid</button>
+      </div>
+      <div id="theme-options" class="theme-options" role="group" aria-label="Visual style" hidden>
+        <button id="theme-gallery-night" class="theme-option" aria-pressed="false"><span class="theme-swatch swatch-gallery-night" aria-hidden="true"></span><strong>Gallery Night</strong><small>Dark olive · warm artwork · soft peach</small></button>
+        <button id="theme-record-store-after-hours" class="theme-option" aria-pressed="false"><span class="theme-swatch swatch-after-hours" aria-hidden="true"></span><strong>Record Store After Hours</strong><small>Ink blue · muted sleeves · amber</small></button>
+        <button id="theme-midnight-precision" class="theme-option" aria-pressed="false"><span class="theme-swatch swatch-midnight" aria-hidden="true"></span><strong>Midnight Precision</strong><small>Deep navy · fine rules · cool blue</small></button>
+        <button id="theme-warm-gallery" class="theme-option" aria-pressed="false"><span class="theme-swatch swatch-gallery" aria-hidden="true"></span><strong>Warm Gallery</strong><small>Muted paper · framed artwork · olive</small></button>
+        <button id="theme-listening-room-noir" class="theme-option" aria-pressed="false"><span class="theme-swatch swatch-noir" aria-hidden="true"></span><strong>Listening Room Noir</strong><small>Charcoal · cinematic list · amber</small></button>
+        <button id="theme-record-store" class="theme-option" aria-pressed="false"><span class="theme-swatch swatch-record" aria-hidden="true"></span><strong>Record Store</strong><small>Cobalt · bold sleeves · graphic type</small></button>
+        <button id="theme-quiet-precision" class="theme-option" aria-pressed="false"><span class="theme-swatch swatch-precision" aria-hidden="true"></span><strong>Quiet Precision</strong><small>Muted grey · fine rules · hi-fi</small></button>
+        <button id="theme-light" class="theme-option" aria-pressed="false"><span class="theme-swatch swatch-light" aria-hidden="true"></span><strong>Classic Light</strong><small>Softer parchment appearance</small></button>
+        <button id="theme-dark" class="theme-option" aria-pressed="false"><span class="theme-swatch swatch-dark" aria-hidden="true"></span><strong>Classic Dark</strong><small>Original dark appearance</small></button>
+      </div>
+      <div id="exit-actions" class="exit-actions" hidden><button id="cancel-exit" class="primary">Keep listening</button><button id="confirm-exit" class="quiet">Exit Frame Music</button></div>
+      <p id="dialog-error" role="alert"></p>
+    </section>
+  </div>
+</body>
+</html>

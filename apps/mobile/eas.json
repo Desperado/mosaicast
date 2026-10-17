@@ -16,6 +16,18 @@
       "ios": {
         "simulator": true
       }
+    },
+    "production": {
+      "node": "24.18.0",
+      "distribution": "store",
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6823949587"
+      }
     }
   }
 }

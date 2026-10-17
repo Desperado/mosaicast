@@ -26,10 +26,14 @@
     "test": "npm run test --workspaces --if-present && node --test tools/*.test.cjs",
     "check": "npm run lint && npm run typecheck && npm test",
     "bundle:check": "npm run export:all --workspace @mosaicast/mobile",
-    "bridge": "npm run build --workspace @mosaicast/musiccast && node tools/bridge.cjs"
+    "test:layout": "playwright test",
+    "bridge": "npm run build --workspace @mosaicast/musiccast && node tools/bridge.cjs",
+    "frame": "npm start --workspace @mosaicast/frame"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
+    "@playwright/test": "1.64.1",
+    "esbuild": "0.28.2",
     "eslint": "^10.12.0",
     "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
