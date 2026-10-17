@@ -212,7 +212,8 @@ test('QR pairing authenticates the scanned invitation, waits for durable phone s
   assert.equal(JSON.stringify(descriptor).includes(qr.invitation.secret), false);
   const wrong = { ...qr.invitation, secret: randomBytes(32).toString('hex') };
   await assert.rejects(beginQRPairing(url, wrong, random, f.fetcher, f.now()));
-  assert.equal(f.service.pairing, undefined);
+  assert.equal(f.service.pairing.qr, true, 'a forged prepare must leave the scanned invitation pending');
+  assert.throws(() => f.service.approve(), /expired/);
   const pending = await beginQRPairing(url, qr.invitation, random, f.fetcher, f.now());
   assert.equal(f.service.pairing.qr, true);
   assert.equal(f.service.pairing.comparison, undefined);
@@ -283,4 +284,29 @@ test('explicit rescanning after a phone restart can replace a pair with the same
     assert.equal(restarted.pairing, undefined);
     assert.equal(f.writes, 0);
   } finally { restarted.close(); }
+});
+
+
+test('connection status requires a live TV handshake and keeps a new QR distinct from a saved pair', async () => {
+  const f = fixture(), record = await paired(f);
+  assert.equal(f.service.tvConnected, false);
+  const exchange = await connectPeer(record, random, f.fetcher);
+  assert.equal(f.service.tvConnected, false, 'a session alone has not yielded authority');
+  await exchange();
+  assert.equal(f.service.tvConnected, true);
+  const qr = createPeerInvitation(random, receiver, f.now());
+  f.service.acceptInvitation(qr.text);
+  assert.equal(f.service.paired, true);
+  assert.equal(f.service.pairing.qr, true);
+  assert.equal(f.service.pairing.expires, qr.invitation.expires);
+  f.service.cancelPairing();
+  assert.equal(f.service.pairing, undefined);
+  f.advance(12001);
+  assert.equal(f.service.tvConnected, false);
+  f.service.takeControl();
+  assert.equal(f.service.canControl, true);
+  assert.equal(f.service.tvConnected, false, 'phone takeover is not a connected TV');
+  f.service.acceptInvitation(qr.text); f.advance(300001);
+  assert.equal(f.service.pairing, undefined);
+  f.service.close();
 });

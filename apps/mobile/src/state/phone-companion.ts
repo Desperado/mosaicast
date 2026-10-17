@@ -3,7 +3,7 @@ import { CompanionController, CompanionCoordinator, MusicCastClient, PhonePeerSe
 import { localSearchAddress } from './discovery';
 import { loadPairing, savePairing } from './pairing-store';
 
-export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; saveFailed?: boolean };
+export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; expires?: number; connected?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; saveFailed?: boolean };
 type PeerRequest = { id: string; method: string; path: string; body: string };
 type PeerNative = {
   addListener(event: 'request', listener: (event: PeerRequest) => void): { remove(): void };
@@ -28,7 +28,7 @@ export class PhoneCompanion implements Controller {
   constructor(readonly host: string, private readonly notify: (status: PeerStatus) => void) {}
   private status() {
     const service = this.service;
-    this.notify(service ? { url: service.url, ...service.pairing, paired: service.paired, saveFailed: this.saveFailed, waiting: service.waitingForTV } : {});
+    this.notify(service ? { url: service.url, ...service.pairing, paired: service.paired, connected: service.tvConnected, saveFailed: this.saveFailed, waiting: service.waitingForTV } : {});
   }
   private ensure() {
     if (!this.active || this.closed) return Promise.reject(new Error('Inactive'));

@@ -46,15 +46,17 @@ export class PhonePeerService {
   }
   get pairing() {
     const p = this.pending;
+    if (this.invitation && this.invitation.expires > this.now()) return { qr: true, expires: this.invitation.expires };
     return p?.key && p.expires > this.now() ? { ...(p.qr ? { qr: true } : { comparison: peerSAS(p.key) }), approved: p.approved } : undefined;
   }
   get paired() { return !!this.record; }
+  get tvConnected() { return !!this.record && !!this.session && this.canControl && !this.explicit && this.now() < this.leaseUntil; }
   get waitingForTV() { return !this.canControl; }
   get canControl() {
     if (this.granted && this.record && !this.explicit && this.now() >= this.leaseUntil) { this.granted = false; this.session = undefined; this.coordinator.invalidate(); }
     return this.active && this.granted;
   }
-  approve() { if (!this.pairing) throw new Error('Pairing expired'); this.pending!.approved = true; }
+  approve() { const p = this.pending; if (!p?.key || p.expires <= this.now()) throw new Error('Pairing expired'); p.approved = true; }
   acceptInvitation(text: string) {
     const invitation = readPeerInvitation(text, this.now());
     if (!this.active || this.confirming) throw new Error('Pairing busy');

@@ -9,6 +9,7 @@ import { PhoneCompanion, type PeerStatus } from './phone-companion';
 import { deviceController } from './device-controller';
 import { useHardwareVolume } from './hardware-volume';
 import { lifecycleChange } from './lifecycle';
+import { launchedForPairing } from './pairing-link';
 import { defaults, parsePreferences, preferenceWriter, preferencesKey, resolveAppearance, resolveLanguage, updateHiddenBluetoothDevices, type Preferences } from './preferences';
 
 export const demoRooms = ['livingRoom', 'studio'] as const;
@@ -86,7 +87,7 @@ function useAppState() {
   }, [controllers, readPreferences]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || launchedForPairing()) return;
     const restored = preferencesRef.current;
     if (restored.mode === 'device') {
       setActiveRoom('device');

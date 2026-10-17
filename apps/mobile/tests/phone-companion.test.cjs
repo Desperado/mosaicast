@@ -109,7 +109,7 @@ test('scanned QR accepts authenticated pairing and exposes a failed phone save u
   globalThis.peerStore = { save(value) { saves++; if (failSave) throw new Error('storage unavailable'); this.record = value; } };
   const fetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error('offline'); };
-  const { createPeerInvitation, beginQRPairing } = require(musiccast);
+  const { createPeerInvitation, beginQRPairing, connectPeer } = require(musiccast);
   const { PhoneCompanion } = require('../src/state/phone-companion.ts');
   const companion = new PhoneCompanion('192.168.1.20', status => statuses.push(status));
   const fetcher = (address, options = {}) => new Promise(resolve => {
@@ -119,6 +119,8 @@ test('scanned QR accepts authenticated pairing and exposes a failed phone save u
   try {
     const qr = createPeerInvitation(n => new Uint8Array(randomBytes(n)), '192.168.1.20');
     await companion.acceptInvitation(qr.text);
+    assert.equal(statuses.at(-1).qr, true);
+    assert.equal(statuses.at(-1).connected, false);
     const pending = await beginQRPairing('http://192.168.1.10:8095', qr.invitation, n => new Uint8Array(randomBytes(n)), fetcher);
     await assert.rejects(pending.confirm()); await settle();
     assert.equal(statuses.at(-1).saveFailed, true);
@@ -129,6 +131,11 @@ test('scanned QR accepts authenticated pairing and exposes a failed phone save u
     assert.equal(statuses.at(-1).saveFailed, false);
     assert.equal(statuses.at(-1).paired, true);
     assert.equal(saves, 2);
+    assert.equal(statuses.at(-1).connected, false, 'a saved pair is not yet a TV connection');
+    const exchange = await connectPeer(globalThis.peerStore.record, n => new Uint8Array(randomBytes(n)), fetcher);
+    await exchange(); await settle();
+    assert.equal(statuses.at(-1).connected, true);
+    assert.equal(statuses.at(-1).qr, undefined);
   } finally { companion.close(); globalThis.fetch = fetch; delete globalThis.peerNative; delete globalThis.peerStore; }
 });
 
