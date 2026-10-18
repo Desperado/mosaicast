@@ -103,9 +103,10 @@ no device command. Connected headphones stay visible, even if previously hidden.
 Restore clears the filter for the current receiver only. Pairing deletion is not
 exposed by the documented Yamaha API and is not presented as an available control.
 
-On-demand native discovery uses Expo Network to obtain the phone's local IPv4
-on Wi-Fi or Ethernet. The pure adapter scans only its `/24` range, skipping the
-phone, with 12 workers and 1.2-second abortable probes to the fixed
+On-demand native discovery uses Expo Network to obtain the phone's private local
+IPv4 directly. Default-route classification does not gate LAN access: it can be
+unknown while the Wi-Fi interface still has a usable address. The pure adapter
+scans only its `/24` range, skipping the phone, with 12 workers and 1.2-second abortable probes to the fixed
 `system/getDeviceInfo` endpoint. Non-success, malformed, redirected or oversized
 responses are ignored; only successful Yamaha-shaped responses with a model name
 appear. Results are not persisted or automatically connected. Screen blur,
