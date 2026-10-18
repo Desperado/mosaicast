@@ -25,10 +25,15 @@ export default function Companion() {
   const [permission, requestPermission] = useCameraPermissions();
   const scanLock = useRef(false);
   const [pendingInvitation, setPendingInvitation] = useState<string | undefined>(undefined);
-  const connected = !scanning && !busy && !peerStatus.qr && !pendingInvitation && !!peerStatus.connected;
+  const connectionFailed = !scanning && !busy && !!(failed || peerStatus.unavailable || peerStatus.startFailed || peerStatus.failure);
+  const connected = !scanning && !busy && !qrError && !cameraError && !connectionFailed && !peerStatus.qr && !pendingInvitation && !!peerStatus.connected;
   const deadline = peerStatus.expires ?? expires;
   const expired = (scanned || !!peerStatus.qr) && !connected && now >= deadline;
-  const pairing = !failed && !expired && (busy || !!peerStatus.qr || (scanned && !connected));
+  const pairing = !scanning && !qrError && !connectionFailed && !expired && (busy || !!peerStatus.qr || (scanned && !connected));
+  const needsAddress = !!pendingInvitation && !busy;
+  const feedback = scanning ? 'camera' : qrError || expired ? 'qr-error' : cameraError ? 'camera-error'
+    : busy ? 'preparing' : connectionFailed ? `failed-${peerStatus.failure ?? 'connection'}`
+    : connected ? 'connected' : needsAddress ? 'address' : pairing ? 'waiting' : 'idle';
   // A later TV disconnect must not revive the completed QR attempt.
   if (connected && scanned) { setScanned(false); setStarted(0); }
   useFocusEffect(useCallback(() => () => setScanning(false), []));
@@ -69,7 +74,7 @@ export default function Companion() {
   }, [ready, deviceState.busy, busy, scan]));
   async function start() {
     if (busy || !privateIPv4(host)) return;
-    setBusy(true); setFailed(false);
+    setBusy(true); setFailed(false); setQRError(false); setCameraError(false);
     try {
       if (pendingInvitation) readPeerInvitation(pendingInvitation);
       if (!await connectCompanion(host, pendingInvitation)) setFailed(true);
@@ -85,20 +90,31 @@ export default function Companion() {
   function cancel() {
     cancelPeer(); setPendingInvitation(undefined); setScanned(false); setScanning(false);
   }
-  return <Screen><BackHeader title={t('companion')}/><ScrollArea><View style={styles.stack}>
+  return <Screen><BackHeader title={t('companion')}/><ScrollArea resetKey={`${feedback}-${!!peerStatus.saveFailed}`}><View style={styles.stack}>
+    {cameraError && <Copy accessibilityRole="alert">{t('cameraUnavailable')}</Copy>}
+    {(qrError || expired) && <Copy accessibilityRole="alert">{t('qrInvalid')}</Copy>}
+    {connectionFailed && <Card>
+      <Copy accessibilityRole="alert">{t(peerStatus.unavailable ? 'peerNativeRequired'
+        : peerStatus.failure === 'address' ? 'pairingAddressFailed'
+        : peerStatus.failure === 'storage' ? 'pairingStorageFailed'
+        : peerStatus.failure === 'listener' ? 'pairingListenerFailed'
+        : peerStatus.failure === 'receiver' ? 'pairingReceiverFailed' : 'pairingFailed')}</Copy>
+      {peerStatus.failure === 'receiver' && <Copy>{deviceState.host}</Copy>}
+    </Card>}
+    {peerStatus.saveFailed && <Copy accessibilityRole="alert">{t('phoneSaveFailed')}</Copy>}
     {connected ? <Card>
       <Copy kind="heading">{t('phoneTVConnected')}</Copy>
       <Copy>{t('phoneTVConnectedBody')}</Copy>
       <Button label={t('scanTVQR')} disabled={!ready || deviceState.busy} onPress={openScanner}/>
       <Button label={t('listen')} primary disabled={deviceState.busy} onPress={async () => { await refresh(); router.replace('/(tabs)/listen'); }}/>
     </Card> : <>
-      <Copy>{t('qrBody')}</Copy>
       {pairing && <Card><View accessibilityLiveRegion="polite" style={styles.smallStack}>
-        <ActivityIndicator color={colors.accent}/>
-        <Copy kind="heading">{t('phoneTVConnecting')}</Copy>
-        <Copy>{t('qrWaiting')}</Copy>
-        {now - (started || deadline - 300000) >= 30000 && <Copy>{t('qrSlow')}</Copy>}
+        {!needsAddress && <ActivityIndicator color={colors.accent}/>}
+        <Copy kind="heading">{t(busy || needsAddress ? scanned ? 'qrScanned' : 'phoneTVConnecting' : 'phoneTVWaiting')}</Copy>
+        <Copy>{t(busy ? 'qrPreparing' : needsAddress ? 'qrReceiver' : 'qrWaiting')}</Copy>
+        {!busy && !needsAddress && now - (started || deadline - 300000) >= 30000 && <Copy>{t('qrSlow')}</Copy>}
       </View></Card>}
+      {!pairing && <Copy>{t('qrBody')}</Copy>}
       {!pairing && !scanning && <Button label={t('scanTVQR')} primary disabled={busy || !ready || deviceState.busy} onPress={openScanner}/>}
     </>}
     {scanning && (Platform.OS !== 'ios' ? <Copy accessibilityRole="alert">{t('qrNativeRequired')}</Copy> : permission?.granted ? <>
@@ -109,9 +125,6 @@ export default function Companion() {
       <Button label={t(permission?.canAskAgain === false ? 'cameraSettings' : 'allowCamera')} onPress={() => { void (permission?.canAskAgain === false ? Linking.openSettings() : requestPermission()).catch(() => setCameraError(true)); }}/>
       <Button label={t('close')} onPress={() => setScanning(false)}/>
     </>)}
-    {cameraError && <Copy accessibilityRole="alert">{t('cameraUnavailable')}</Copy>}
-    {(qrError || expired) && <Copy accessibilityRole="alert">{t('qrInvalid')}</Copy>}
-    {peerStatus.saveFailed && <Copy accessibilityRole="alert">{t('phoneSaveFailed')}</Copy>}
     {pairing && <Button label={t('cancelPairing')} disabled={busy} onPress={cancel}/>}
     {!scanning && !busy && <Button label={t(manual ? 'close' : 'pairingHelp')} onPress={() => setManual(value => !value)}/>}
     {manual && <Card>
@@ -132,14 +145,6 @@ export default function Companion() {
       <Copy>{t('compareScreens')}</Copy><Copy>{peerStatus.comparison}</Copy>
       <Button label={t(peerStatus.approved ? 'waitingTVConfirm' : 'codesMatch')} primary disabled={peerStatus.approved} onPress={approvePeer}/>
       <Button label={t('cancelPairing')} onPress={cancel}/>
-    </Card>}
-    {(failed || peerStatus.unavailable || peerStatus.startFailed || peerStatus.failure) && <Card>
-      <Copy accessibilityRole="alert">{t(peerStatus.unavailable ? 'peerNativeRequired'
-        : peerStatus.failure === 'address' ? 'pairingAddressFailed'
-        : peerStatus.failure === 'storage' ? 'pairingStorageFailed'
-        : peerStatus.failure === 'listener' ? 'pairingListenerFailed'
-        : peerStatus.failure === 'receiver' ? 'pairingReceiverFailed' : 'pairingFailed')}</Copy>
-      {peerStatus.failure === 'receiver' && <Copy>{deviceState.host}</Copy>}
     </Card>}
   </View></ScrollArea></Screen>;
 }

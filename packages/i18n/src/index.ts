@@ -1,4 +1,5 @@
 export const en = {
+  qrScanned: 'TV QR code read', qrPreparing: 'Preparing the phone connection and checking Yamaha…', phoneTVWaiting: 'Waiting for your TV…',
   phoneTVConnecting: 'Connecting to your TV…', phoneTVConnected: 'Phone and TV connected',
   phoneTVConnectedBody: 'You can now control your Yamaha from either screen.',
   qrSlow: 'Taking longer than expected? Check that both devices use the same home network (the TV can use Ethernet) and that Mosaicast has Local Network access in iPhone Settings. You can also enter the phone address on the TV.',
@@ -104,6 +105,7 @@ export const en = {
 export type TranslationKey = keyof typeof en;
 export type Locale = 'en' | 'uk';
 export const uk: Record<TranslationKey, string> = {
+  qrScanned: 'QR-код телевізора зчитано', qrPreparing: 'Готуємо підключення телефона та перевіряємо Yamaha…', phoneTVWaiting: 'Очікуємо телевізор…',
   phoneTVConnecting: 'Підключаємо до телевізора…', phoneTVConnected: 'Телефон і ТВ під’єднані',
   phoneTVConnectedBody: 'Тепер можна керувати Yamaha з обох екранів.',
   qrSlow: 'Підключення затягнулося? Перевірте, що обидва пристрої в одній домашній мережі (ТВ може бути під’єднаний кабелем), а Mosaicast має доступ до локальної мережі в налаштуваннях iPhone. Також можна ввести адресу телефону на ТВ.',
