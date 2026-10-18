@@ -138,3 +138,56 @@ test('an observation discovering a new generation blocks an already requested wr
   await assert.rejects(write, error => error.code === 'reconcile');
   assert.equal(f.writes, 0); await client.reconcile(); await client.execute(volume); assert.equal(f.writes, 1);
 });
+
+
+test('first TV Refresh waits for an in-flight phone poll without queueing Yamaha writes', async () => {
+  const f = fixture(), tv = f.client('tv');
+  const gate = Promise.withResolvers(), read = f.adapter.read;
+  let active = 0, overlap = false;
+  f.adapter.read = async () => {
+    if (++active > 1) overlap = true;
+    await gate.promise;
+    try { return await read(); } finally { active--; }
+  };
+  const poll = f.coordinator.poll();
+  const refresh = tv.reconcile();
+  assert.equal((await f.coordinator.handle('phone', request(1, { type: 'command', command: volume }))).code, 'busy');
+  gate.resolve(); await poll;
+  assert.equal((await refresh).status.volume, 10);
+  assert.equal(tv.state.needsReconcile, false);
+  assert.equal(overlap, false); assert.equal(f.writes, 0);
+});
+
+test('shared pairing refresh clears on both apps and does not claim an unknown command result', async () => {
+  const f = fixture(), phone = f.client('phone'), tv = f.client('tv');
+  await f.coordinator.poll(); await phone.reconcile();
+  const session = new DeviceSession(() => phone); await session.connect(host);
+  try {
+    f.coordinator.invalidate(); await phone.observe();
+    assert.equal(session.state.needsRefresh, true);
+    assert.equal(session.state.error, 'refreshRequired');
+    await tv.reconcile(); await phone.observe();
+    assert.equal(session.state.needsRefresh, false);
+    assert.equal(session.state.error, undefined);
+    await session.execute(volume); assert.equal(f.writes, 1);
+  } finally { session.disconnect(); }
+});
+
+test('a remote Refresh cannot clear a phone command whose reply was lost', async () => {
+  const f = fixture(), tv = f.client('tv'); let lose = true;
+  const phone = new CompanionController(host, async req => {
+    const reply = await f.exchange('phone')(req);
+    if (req?.operation.type === 'command' && lose) { lose = false; throw new Error('lost reply'); }
+    return reply;
+  });
+  await f.coordinator.poll(); await phone.reconcile();
+  const session = new DeviceSession(() => phone); await session.connect(host);
+  try {
+    await session.execute(volume);
+    await tv.reconcile(); await phone.observe();
+    assert.equal(session.state.needsRefresh, true);
+    assert.equal(session.state.error, 'uncertainError');
+    await session.execute(volume); assert.equal(f.writes, 1);
+    await session.refresh(); await session.execute(volume); assert.equal(f.writes, 2);
+  } finally { session.disconnect(); }
+});

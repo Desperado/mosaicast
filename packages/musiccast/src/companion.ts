@@ -73,6 +73,7 @@ export class CompanionCoordinator {
   private lease?: { owner: string; token: string; expires: number };
   private leaseSequence = 0;
   private operating = false;
+  private polling?: Promise<void>;
   constructor(private readonly controller: Controller, generation: string, private readonly now = Date.now) {
     this.current = { version: 1, generation, revision: 0, freshness: 'stale', needsReconcile: true };
   }
@@ -97,11 +98,15 @@ export class CompanionCoordinator {
     return { sequence, outcome, state: this.state, ...(code ? { code } : {}) };
   }
   async poll() {
+    if (this.polling) return this.polling;
     if (this.operating) return;
     this.operating = true;
-    try { this.publish({ snapshot: await this.controller.read(), freshness: 'fresh' }); }
-    catch { this.publish({ freshness: 'stale' }); }
-    finally { this.operating = false; }
+    this.polling = (async () => {
+      try { this.publish({ snapshot: await this.controller.read(), freshness: 'fresh' }); }
+      catch { this.publish({ freshness: 'stale' }); }
+      finally { this.operating = false; }
+    })();
+    try { await this.polling; } finally { this.polling = undefined; }
   }
   handle(client: string, request: CompanionRequest): Promise<CompanionReply> {
     if (!validCompanionRequest(request)) return Promise.resolve(this.reply(0, 'rejected', 'invalid'));
@@ -123,6 +128,9 @@ export class CompanionCoordinator {
     return result.then(clone);
   }
   private async perform(client: string, { sequence, operation: op }: CompanionRequest): Promise<CompanionReply> {
+    // A read-only Refresh may wait for a background read. Commands and menu
+    // operations still reject concurrent work and are never queued or replayed.
+    if (op.type === 'reconcile' && this.polling) await this.polling;
     if (this.operating) return this.reply(sequence, 'rejected', 'busy');
     if (this.lease && this.now() >= this.lease.expires) this.release();
     if (op.type === 'release') {

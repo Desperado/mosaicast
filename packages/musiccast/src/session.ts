@@ -11,7 +11,7 @@ export interface DeviceState {
   pendingCommand?: Command;
   refreshing?: boolean;
   needsRefresh: boolean;
-  error?: 'connectError' | 'bridgeError' | 'readError' | 'uncertainError' | 'companionBusy' | 'commandRejected';
+  error?: 'connectError' | 'bridgeError' | 'readError' | 'uncertainError' | 'refreshRequired' | 'companionBusy' | 'commandRejected';
   outcome?: 'confirmed' | 'accepted' | 'bluetoothSearchStarted';
   browse?: BrowsePage;
   browseError?: BrowseErrorCode;
@@ -63,8 +63,9 @@ export class DeviceSession {
       this.stopWatching = controller.watch?.(observed => {
         if (generation !== this.generation) return;
         this.update({ ...(observed.snapshot ? { snapshot: observed.snapshot } : {}),
-          phase: observed.stale ? 'stale' : 'connected', needsRefresh: observed.needsRefresh || this.state.needsRefresh,
-          ...(observed.needsRefresh ? { error: 'uncertainError' } : {}) });
+          phase: observed.stale ? 'stale' : 'connected', needsRefresh: observed.needsRefresh || (this.state.needsRefresh && this.state.error === 'uncertainError'),
+          ...(observed.needsRefresh ? { error: this.state.error === 'uncertainError' ? 'uncertainError' : 'refreshRequired' }
+            : this.state.error === 'refreshRequired' ? { error: undefined } : {}) });
       });
       return true;
     } catch (error) {
