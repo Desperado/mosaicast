@@ -91,8 +91,11 @@ Mosaicast Dev `0.1.0 (15)` was built locally on 18 October 2026 from commit
 `90cf676`. Native compilation, bundle identity/build-number checks and code-
 signature verification passed. It fixes post-pairing refresh contention and
 distinguishes a shared refresh requirement from a genuinely uncertain command.
-Installation over the network failed because the iPhone closed the connection;
-a USB install and simultaneous phone/TV acceptance remain to be run.
+Build 15 was installed and launched on the physical iPhone; the installed
+bundle version was verified as `15`. The corresponding TV refresh-fix package
+from Frame Music commit `37c9ad3` was installed in place and launched on the
+Samsung GQ55LS03BGUXZG. Simultaneous post-fix phone/TV acceptance remains to
+be run.
 
 Mosaicast Dev `0.1.0 (14)` was built locally on 18 October 2026 from commit
 `c821751`. Native compilation and code-signature verification passed. It includes
@@ -211,8 +214,7 @@ the unsupported-native-build message for peer setup.
 Production JavaScript export is not a native compilation check. Full Xcode, a
 signed iPhone build, a signed Tizen package and simultaneous hardware testing are
 required before release. Mosaicast Dev build 15 completed locally, and build 12
-is available on EAS. The earlier TV package installed and launched on the Samsung
-GQ55LS03BGUXZG. The post-pairing refresh package was signed successfully, but its
-transfer failed when the TV became unreachable. Simultaneous post-fix iPhone/TV
-validation remains to be run. See
+is available on EAS. Build 15 and the corresponding signed TV refresh-fix package
+were installed and launched on the physical iPhone and Samsung GQ55LS03BGUXZG.
+Simultaneous post-fix iPhone/TV validation remains to be run. See
 [peer validation](companion-validation.md).
