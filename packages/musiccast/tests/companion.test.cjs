@@ -191,3 +191,57 @@ test('a remote Refresh cannot clear a phone command whose reply was lost', async
     await session.refresh(); await session.execute(volume); assert.equal(f.writes, 2);
   } finally { session.disconnect(); }
 });
+
+test('a successful cached observation clears a watch transport error without a new revision', async t => {
+  const f = fixture(); let offline = false;
+  const tv = new CompanionController(host, request => {
+    if (offline) return Promise.reject(new Error('connection interrupted'));
+    return f.exchange('tv')(request);
+  });
+  await f.coordinator.poll(); await tv.reconcile();
+  const revision = tv.state.revision, observed = [];
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const stop = tv.watch(state => observed.push(state));
+  try {
+    offline = true; t.mock.timers.tick(500);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(observed.at(-1).stale, true);
+    assert.equal(observed.at(-1).needsRefresh, false);
+    offline = false; t.mock.timers.tick(500);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(tv.state.revision, revision);
+    assert.equal(observed.at(-1).stale, false);
+    assert.equal(observed.at(-1).needsRefresh, false);
+    assert.equal(f.writes, 0);
+  } finally { stop(); }
+});
+
+test('a phone Refresh after coordinator restart also unlocks an observing TV', async () => {
+  const f = fixture(), tv = f.client('tv');
+  await f.coordinator.poll(); await tv.reconcile();
+  f.restart(); await f.coordinator.poll(); await tv.observe();
+  await assert.rejects(tv.execute(volume), error => error.code === 'reconcile');
+  assert.equal(f.writes, 0);
+  await f.client('phone').reconcile(); await tv.observe();
+  const observed = []; const stop = tv.watch(state => observed.push(state));
+  try {
+    assert.equal(observed.at(-1).needsRefresh, false);
+    await tv.execute(volume); assert.equal(f.writes, 1);
+  } finally { stop(); }
+});
+
+test('a coordinator restart and phone Refresh cannot clear the TV own lost write reply', async () => {
+  const f = fixture();
+  const tv = new CompanionController(host, async request => {
+    const reply = await f.exchange('tv')(request);
+    if (request?.operation.type === 'command') throw new Error('lost reply');
+    return reply;
+  });
+  await f.coordinator.poll(); await tv.reconcile();
+  await assert.rejects(tv.execute(volume), error => error.code === 'uncertain');
+  f.restart(); await f.coordinator.poll(); await tv.observe();
+  await f.client('phone').reconcile(); await tv.observe();
+  await assert.rejects(tv.execute(volume), error => error.code === 'reconcile');
+  assert.equal(f.writes, 1);
+  await tv.reconcile();
+});

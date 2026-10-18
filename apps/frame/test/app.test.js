@@ -1135,7 +1135,8 @@ test('leaving shared setup cancels all discovery probes and ignores late results
 
 test('a shared Refresh clears the TV recovery warning without hiding unrelated errors', async () => {
   const snapshot = {model: 'Shared fixture', features: {controls: ['volume'], connectivity: [], sources: [{id: 'deezer', name: 'Deezer', networkPlayer: true}], volumeRange: {min: 0, max: 30, step: 1}}, status: {power: 'on', input: 'deezer', volume: 10}, trackUnavailable: false};
-  const coordinator = new shared.CompanionCoordinator({read: async () => snapshot}, 'ui-fixture');
+  let readFailed = false;
+  const coordinator = new shared.CompanionCoordinator({read: async () => { if (readFailed) throw new Error('receiver unavailable'); return snapshot; }}, 'ui-fixture');
   const pairing = {url: 'http://192.168.1.10:8095', receiver: '192.168.1.20', id: randomBytes(16).toString('hex'), key: randomBytes(32).toString('hex')};
   const phone = new shared.PhonePeerService(pairing.receiver, pairing.url, coordinator, n => new Uint8Array(randomBytes(n)), pairing, async () => {});
   const app = await launch({keymanager: {getData: () => JSON.stringify(pairing)}}, {
@@ -1145,10 +1146,19 @@ test('a shared Refresh clears the TV recovery warning without hiding unrelated e
     }
   });
   coordinator.invalidate(); await app.poll();
-  assert.match(app.nodes.get('message').textContent, /Coordinator changed/);
+  assert.match(app.nodes.get('message').textContent, /[Cc]hoose Refresh/);
   assert.equal(app.nodes.get('volume-up').disabled, true);
   const handset = new shared.CompanionController(pairing.receiver, phone.localExchange);
   await handset.reconcile(); await app.poll();
+  assert.equal(app.nodes.get('connection-badge').textContent, 'COMPANION CONNECTED');
+  assert.equal(app.nodes.get('message').textContent, '');
+  assert.equal(app.nodes.get('volume-up').disabled, false);
+  readFailed = true; await coordinator.poll(); await app.poll();
+  assert.equal(app.nodes.get('connection-badge').textContent, 'RECONNECTING');
+  assert.match(app.nodes.get('message').textContent, /Reconnecting/);
+  assert.doesNotMatch(app.nodes.get('message').textContent, /one minute|Refresh/);
+  assert.equal(app.nodes.get('volume-up').disabled, true);
+  readFailed = false; await coordinator.poll(); await app.poll();
   assert.equal(app.nodes.get('connection-badge').textContent, 'COMPANION CONNECTED');
   assert.equal(app.nodes.get('message').textContent, '');
   assert.equal(app.nodes.get('volume-up').disabled, false);

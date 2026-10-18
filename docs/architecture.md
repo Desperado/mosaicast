@@ -239,7 +239,10 @@ all Yamaha mutation routes at dispatch, including writes after awaited preflight
 Semantic DTOs carry generation, revision, sequence, freshness and menu lease;
 never arbitrary routes or proxy targets. One operation runs with no queue.
 Eight bounded client histories retain 64 outcomes each; duplicate sequences do not
-repeat writes. Generation changes and uncertain results require explicit refresh.
+repeat writes. After a generation change, explicit Refresh on either screen
+clears the shared recovery gate. A client with its own unknown command result
+still requires its own Refresh. Temporary observation failures clear on the next
+fresh observation, even when its cached revision has not changed.
 Coordinator invalidation during a slow Refresh stays latched after it completes.
 Menu ownership lasts 45 seconds; takeover invalidates old selections. External
 Yamaha controllers remain outside this lease and the final check/write gap remains.

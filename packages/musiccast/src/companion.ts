@@ -200,6 +200,7 @@ export class CompanionController implements Controller {
   private operating = false;
   private uncertain = false;
   private active = true;
+  private observationFailed = false;
   private observing?: Promise<CompanionState>;
   private readonly observers = new Set<(state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean }) => void>();
   setActive(active: boolean) { this.active = active; }
@@ -210,7 +211,7 @@ export class CompanionController implements Controller {
     this.observers.add(listener); this.emit();
     const timer = setInterval(() => {
       if (!this.active || this.operating) return;
-      void this.observe().catch(() => this.emit(true));
+      void this.observe().catch(() => { this.observationFailed = true; this.emit(true); });
     }, 500);
     return () => { clearInterval(timer); this.observers.delete(listener); };
   }
@@ -229,10 +230,13 @@ export class CompanionController implements Controller {
   }
   private accept(state: CompanionState) {
     if (state.version !== 1) throw new CompanionError('invalid');
+    const recovered = this.observationFailed; this.observationFailed = false;
     if (!this.current || state.generation !== this.current.generation || state.revision > this.current.revision) {
-      if (this.current && state.generation !== this.current.generation) { this.sequence = 0; this.lease = ''; this.uncertain = true; }
+      // The new coordinator owns the shared Refresh gate. Keep the local latch
+      // only for this client's unknown write result, which a peer cannot clear.
+      if (this.current && state.generation !== this.current.generation) { this.sequence = 0; this.lease = ''; }
       this.current = state; this.notify(state); this.emit();
-    }
+    } else if (recovered) this.emit();
   }
   private async operation(op: CompanionOperation): Promise<CompanionReply> {
     if (this.operating) throw new CompanionError('busy');

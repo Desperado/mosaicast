@@ -56,7 +56,8 @@ let playerOrigin = 'content', lastArrow = 0, lastArrowTime = 0, heldArrow;
 const lyricsLoader = new LyricsLoader();
 const icons = { Flow: '≈', Charts: '↗', Recommendations: '✧', Mixes: '♫', Genres: '◈', 'My library': '▤', Search: '⌕' };
 
-const companionRecoveryMessage = 'Coordinator changed or an action needs checking. After a phone disconnect, wait one minute, then choose Refresh.';
+const companionRecoveryMessage = 'Connection changed or an action needs checking. Choose Refresh to read the current Yamaha state.';
+const companionReconnectingMessage = 'Connection interrupted. Reconnecting to iPhone and Yamaha… Keep Mosaicast open on your iPhone.';
 
 function message(text, error = false) {
   $('message').textContent = text;
@@ -588,13 +589,13 @@ async function connect(host, demo = false, pairing) {
     }
     const state = candidate.controller.state;
     const blocked = observed.stale || observed.needsRefresh;
-    $('connection-badge').textContent = blocked ? 'REFRESH CONNECTION' : state?.activity ? 'YAMAHA BUSY' : 'COMPANION CONNECTED';
+    $('connection-badge').textContent = observed.needsRefresh ? 'REFRESH CONNECTION' : observed.stale ? 'RECONNECTING' : state?.activity ? 'YAMAHA BUSY' : 'COMPANION CONNECTED';
     if (blocked) {
       for (const button of $('tuner-controls').querySelectorAll('button')) button.disabled = true;
-      tunerSignature = ''; // Re-enable only from a fresh observation after explicit recovery.
+      tunerSignature = ''; // Re-enable only after fresh state and any required Refresh.
       for (const id of ['power-on', 'power-off', 'previous', 'toggle-play', 'next', 'volume-up', 'volume-down', 'mute']) $(id).disabled = true;
-      message(companionRecoveryMessage, true);
-    } else if ($('message').textContent === companionRecoveryMessage) message('');
+      message(observed.needsRefresh ? companionRecoveryMessage : companionReconnectingMessage, observed.needsRefresh);
+    } else if ([companionRecoveryMessage, companionReconnectingMessage].includes($('message').textContent)) message('');
   });
   closeDialog();
   (menu ? $('menu') : $('source-list')).querySelector('button:not(:disabled)')?.focus();
