@@ -48,7 +48,7 @@ export default function Companion() {
   }, [pairing]);
   const scan = useCallback(async (data: string) => {
     if (scanLock.current) return;
-    scanLock.current = true; setScanning(false); setQRError(false); setFailed(false);
+    scanLock.current = true; setScanning(false); setQRError(false); setCameraError(false); setFailed(false);
     let invitation;
     try { invitation = readPeerInvitation(data); }
     catch { setQRError(true); setScanned(false); setPendingInvitation(undefined); return; }
@@ -75,6 +75,7 @@ export default function Companion() {
   async function start() {
     if (busy || !privateIPv4(host)) return;
     setBusy(true); setFailed(false); setQRError(false); setCameraError(false);
+    if (!pendingInvitation) { setScanned(false); setStarted(0); setExpires(0); }
     try {
       if (pendingInvitation) readPeerInvitation(pendingInvitation);
       if (!await connectCompanion(host, pendingInvitation)) setFailed(true);
@@ -118,7 +119,8 @@ export default function Companion() {
       {!pairing && <Copy>{t('qrBody')}</Copy>}
       {!pairing && !scanning && <Button label={t('scanTVQR')} primary disabled={busy || !ready || deviceState.busy} onPress={openScanner}/>}
     </>}
-    {scanning && (Platform.OS !== 'ios' ? <Copy accessibilityRole="alert">{t('qrNativeRequired')}</Copy> : permission?.granted ? <>
+    {scanning && (Platform.OS !== 'ios' ? <><Copy accessibilityRole="alert">{t('qrNativeRequired')}</Copy>
+      <Button label={t('close')} onPress={() => setScanning(false)}/></> : permission?.granted ? <>
       <QRScanner onScan={data => { void scan(data); }} onError={() => { setCameraError(true); setScanning(false); }}/>
       <Button label={t('close')} onPress={() => setScanning(false)}/>
     </> : <>
@@ -126,7 +128,7 @@ export default function Companion() {
       <Button label={t(permission?.canAskAgain === false ? 'cameraSettings' : 'allowCamera')} onPress={() => { void (permission?.canAskAgain === false ? Linking.openSettings() : requestPermission()).catch(() => setCameraError(true)); }}/>
       <Button label={t('close')} onPress={() => setScanning(false)}/>
     </>)}
-    {pairing && <Button label={t('cancelPairing')} disabled={busy} onPress={cancel}/>}
+    {(pairing || !!pendingInvitation) && <Button label={t('cancelPairing')} disabled={busy} onPress={cancel}/>}
     {!scanning && !busy && <Button label={t(manual ? 'close' : 'pairingHelp')} onPress={() => setManual(value => !value)}/>}
     {manual && <Card>
       <Copy>{t(pairing ? 'qrSlow' : 'companionBody')}</Copy>

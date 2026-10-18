@@ -340,3 +340,26 @@ test('a menu request during a silent read is reserved, then runs once after it',
   assert.deepEqual(order, ['read', 'read', 'browse']);
   assert.deepEqual(session.state.browse, page); assert.equal(session.state.busy, false);
 });
+
+
+for (const explicit of [true, false]) test(`a ${explicit ? 'failed explicit' : 'pending silent'} read preserves shared refresh ownership`, async () => {
+  let observe, reads = 0;
+  const gate = deferred();
+  const session = new DeviceSession(() => ({
+    read: async () => ++reads === 1 ? snapshot : gate.promise,
+    watch: listener => { observe = listener; return () => {}; },
+  }));
+  await session.connect(host);
+  if (explicit) observe({ stale: true, needsRefresh: true });
+  const reading = session.refresh(explicit);
+  if (!explicit) observe({ stale: true, needsRefresh: true });
+  if (explicit) gate.reject(new Error('read unavailable'));
+  else gate.resolve(snapshot);
+  await reading;
+  assert.equal(session.state.needsRefresh, true);
+  assert.equal(session.state.error, 'refreshRequired');
+  observe({ stale: false, needsRefresh: false, snapshot });
+  assert.equal(session.state.needsRefresh, false);
+  assert.equal(session.state.error, undefined);
+  assert.equal(session.state.phase, 'connected');
+});

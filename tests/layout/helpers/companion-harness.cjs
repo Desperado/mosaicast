@@ -6,11 +6,11 @@ const path = require('node:path');
 exports.companionHarness = async () => {
   const root = path.resolve(__dirname, '../../..');
   const stubs = {
-    'react-native': `export * from 'react-native-web'; import {Platform as WebPlatform, View} from 'react-native-web'; export const Platform = {...WebPlatform, OS: 'ios'}; export const InputAccessoryView = View;`,
+    'react-native': `export * from 'react-native-web'; import {Platform as WebPlatform, View} from 'react-native-web'; export const Platform = {...WebPlatform, OS: window.testPlatform || 'ios'}; export const InputAccessoryView = View;`,
     'react-native-safe-area-context': `export {View as SafeAreaView} from 'react-native-web'; export const useSafeAreaInsets = () => ({top:0,bottom:0,left:0,right:0});`,
     'expo-router': `import {useEffect} from 'react'; export const useFocusEffect = callback => useEffect(callback, [callback]); export const router = {canGoBack:()=>false, replace:()=>{}};`,
     'expo-camera': `export const useCameraPermissions = () => [{granted:true}, async()=>({granted:true})];`,
-    '../components/qr-scanner': `import {View} from 'react-native'; export const QRScanner = ({onScan}) => { window.testScan = onScan; return <View style={{height:300}}/>; };`,
+    '../components/qr-scanner': `import {View} from 'react-native'; export const QRScanner = ({onScan,onError}) => { window.testScan = onScan; window.cameraFails = onError; return <View style={{height:300}}/>; };`,
     './icon': `export const Icon = () => null;`,
     '../state/app': `import {createContext, useContext, useState} from 'react';
       import {en,uk} from '@mosaicast/i18n'; import {themes} from '@mosaicast/design';
@@ -18,7 +18,7 @@ exports.companionHarness = async () => {
       export function Provider({children}) {
         const [peerStatus,setPeerStatus] = useState({connected:true});
         const text = window.testLanguage === 'uk' ? uk : en;
-        const connectCompanion = async () => { window.connectCalls = (window.connectCalls || 0) + 1;
+        const connectCompanion = async () => { setPeerStatus({}); window.connectCalls = (window.connectCalls || 0) + 1;
           return new Promise(resolve => { window.finishConnection = (success, failure = 'receiver') => {
             setPeerStatus(success ? {qr:true,expires:Date.now()+300000} : {failure, ...(failure === 'address' && {addressCode:'WIFI_NO_IPV4'})}); resolve(success);
           }; }); };
@@ -31,7 +31,8 @@ exports.companionHarness = async () => {
   const result = await build({
     stdin: {contents: `import {createRoot} from 'react-dom/client';
       import Companion from './apps/mobile/src/app/companion'; import {Provider} from '../state/app';
-      import {createPeerInvitation} from '@mosaicast/musiccast';
+      import {createPeerInvitation} from '@mosaicast/musiccast'; import {redirectPairingLink} from './apps/mobile/src/state/pairing-link';
+      window.openPairing = () => redirectPairingLink(createPeerInvitation(n=>crypto.getRandomValues(new Uint8Array(n)), '192.168.1.20').text);
       window.scanValid = () => window.testScan(createPeerInvitation(n=>crypto.getRandomValues(new Uint8Array(n)), '192.168.1.20').text);
       createRoot(document.getElementById('root')).render(<Provider><Companion/></Provider>);`, resolveDir: root, loader: 'tsx'},
     bundle: true, write: false, platform: 'browser', jsx: 'automatic', define: {'process.env.NODE_ENV':'"test"',__DEV__:'false'},

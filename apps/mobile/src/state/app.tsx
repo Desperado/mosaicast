@@ -34,7 +34,7 @@ function useAppState() {
   const phoneCompanion = useRef<PhoneCompanion | undefined>(undefined);
   const [peerStatus, setPeerStatus] = useState<PeerStatus>({});
   const [session] = useState(() => new DeviceSession(host => {
-    if (!companionMode.current) return deviceController(host);
+    if (!companionMode.current) { phoneCompanion.current = undefined; return deviceController(host); }
     const controller = new PhoneCompanion(host, setPeerStatus);
     phoneCompanion.current = controller;
     return controller;
@@ -173,6 +173,7 @@ function useAppState() {
   }
 
   async function connect(host: string) {
+    if (session.state.busy) return false;
     companionMode.current = false;
     const success = await session.connect(host);
     if (success) {
@@ -183,17 +184,26 @@ function useAppState() {
   }
 
   async function connectCompanion(host: string, invitation?: string) {
+    if (session.state.busy) return false;
     companionMode.current = true;
     const success = await session.connect(host);
-    if (success) {
+    if (!success) return false;
+    const controller = phoneCompanion.current;
+    let completed = false;
+    try {
       if (!await savePreferences({ address: host, mode: 'device', demoStarted: true, connection: 'companion' })) return false;
+      if (!controller || phoneCompanion.current !== controller || !companionMode.current) return false;
       if (invitation) {
-        if (!phoneCompanion.current) throw new Error('Phone companion unavailable');
-        await phoneCompanion.current.acceptInvitation(invitation);
+        await controller.acceptInvitation(invitation);
       }
+      if (phoneCompanion.current !== controller || !companionMode.current) return false;
       setActiveRoom('device');
+      completed = true;
+      return session.state.host === host && session.state.phase === 'connected' && preferencesRef.current.mode === 'device';
+    } finally {
+      // A failed setup must not leave a listener or Yamaha polling in demo mode.
+      if (!completed && controller && phoneCompanion.current === controller && companionMode.current) session.disconnect();
     }
-    return success && session.state.host === host && session.state.phase === 'connected' && preferencesRef.current.mode === 'device';
   }
 
   const loadBrowse = useCallback(async (input: string, index = 0, takeover = false) => {
@@ -228,6 +238,7 @@ function useAppState() {
 
   function startDemo() {
     session.disconnect();
+    phoneCompanion.current = undefined;
     setActiveRoom('livingRoom');
     void savePreferences({ mode: 'demo', demoStarted: true });
   }

@@ -101,11 +101,11 @@ export class DeviceSession {
         await previous;
         if (generation !== this.generation) return;
         const snapshot = await (explicit && controller.reconcile ? controller.reconcile() : controller.read());
-        if (generation === this.generation) this.update({ snapshot, phase: 'connected', needsRefresh: !explicit && this.state.needsRefresh, error: !explicit && this.state.needsRefresh ? 'uncertainError' : undefined,
+        if (generation === this.generation) this.update({ snapshot, phase: 'connected', needsRefresh: !explicit && this.state.needsRefresh, error: !explicit && this.state.needsRefresh ? this.state.error : undefined,
           ...(this.state.needsRefresh ? { browse: undefined, browseError: undefined, browseAccepted: false } : {}) });
       } catch (error) {
         failed = true;
-        if (generation === this.generation) this.update({ phase: 'stale', error: this.state.needsRefresh ? 'uncertainError' : error instanceof Error && error.name === 'BridgeUnavailableError' ? 'bridgeError' : 'readError' });
+        if (generation === this.generation) this.update({ phase: 'stale', error: this.state.needsRefresh ? this.state.error : error instanceof Error && error.name === 'BridgeUnavailableError' ? 'bridgeError' : 'readError' });
       } finally {
         if (generation === this.generation) {
           this.schedulePoll(failed);
