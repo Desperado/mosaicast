@@ -12,16 +12,18 @@ const musiccast = path.resolve(__dirname, '../../../packages/musiccast/dist/inde
 const stubs = {
   // The module reads its native peer once; delegate so each test supplies its own.
   expo: 'export const requireOptionalNativeModule = () => new Proxy({}, { get: (_, key) => globalThis.peerNative[key] });',
-  './discovery': "export const localSearchAddress = async () => { if (globalThis.peerAddressError) throw new Error('address unavailable'); return '192.168.1.10'; };",
+  'react-native': 'export const Platform = { OS: "ios" };',
+  'expo-network': 'export const getIpAddressAsync = async () => { throw new Error("Unexpected Expo lookup"); };',
   './pairing-store': 'export const loadPairing = async () => { if (globalThis.peerStore?.loadError) throw new Error("storage unavailable"); return globalThis.peerStore?.record; }; export const savePairing = async value => globalThis.peerStore?.save(value);',
   '@mosaicast/musiccast': `import { createRequire } from 'node:module'; const m = createRequire(${JSON.stringify(musiccast)})(${JSON.stringify(musiccast)});
-export const { CompanionController, CompanionCoordinator, MusicCastClient, PhonePeerService, peerDeviceFetch } = m;`,
+export const { CompanionController, CompanionCoordinator, MusicCastClient, PhonePeerService, peerDeviceFetch, privateIPv4 } = m;`,
 };
 registerHooks({
   resolve(specifier, context, next) {
     if (Object.hasOwn(stubs, specifier) && (specifier[0] !== '.' || context.parentURL?.endsWith('/phone-companion.ts'))) {
       return { url: `data:text/javascript,${encodeURIComponent(stubs[specifier])}`, shortCircuit: true };
     }
+    if (specifier === './discovery' && context.parentURL?.endsWith('/phone-companion.ts')) return next('./discovery.ts', context);
     return next(specifier, context);
   },
   // Node's type stripping cannot load parameter properties; compile this one module.
@@ -36,6 +38,7 @@ function nativePeer() {
   const calls = [];
   return {
     calls,
+    localAddress: () => globalThis.peerAddressError ? { code: 'WIFI_NO_IPV4' } : { address: '192.168.1.10' },
     addListener: () => ({ remove() {} }),
     start: async host => { calls.push(['start', host]); },
     stop: () => { calls.push(['stop']); },
@@ -200,7 +203,8 @@ for (const failure of ['address', 'storage', 'listener', 'receiver']) {
     const session = new DeviceSession(host => new PhoneCompanion(host, status => statuses.push(status)));
     try {
       assert.equal(await session.connect('192.168.1.20'), false);
-      assert.deepEqual(statuses.at(-1), { failure });
+      assert.deepEqual(statuses.at(-1), { failure, ...(failure === 'address' && { addressCode: 'WIFI_NO_IPV4' }) });
+      if (failure === 'address') assert.equal(native.calls.some(([name]) => name === 'start'), false);
       assert.equal(native.calls.at(-1)[0], 'stop');
       assert.equal(statuses.at(-1).url, undefined);
     } finally {

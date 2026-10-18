@@ -1,9 +1,9 @@
 import { requireOptionalNativeModule } from 'expo';
 import { CompanionController, CompanionCoordinator, MusicCastClient, PhonePeerService, peerDeviceFetch, type Controller, type PeerRandom } from '@mosaicast/musiccast';
-import { localSearchAddress } from './discovery';
+import { localSearchAddress, LocalAddressError, type AddressCode } from './discovery';
 import { loadPairing, savePairing } from './pairing-store';
 
-export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; expires?: number; connected?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; startFailed?: boolean; failure?: 'address' | 'storage' | 'listener' | 'receiver'; saveFailed?: boolean };
+export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; expires?: number; connected?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; startFailed?: boolean; failure?: 'address' | 'storage' | 'listener' | 'receiver'; saveFailed?: boolean; addressCode?: AddressCode };
 type PeerRequest = { id: string; method: string; path: string; body: string };
 type PeerNative = {
   addListener(event: 'request', listener: (event: PeerRequest) => void): { remove(): void };
@@ -25,6 +25,7 @@ export class PhoneCompanion implements Controller {
   private generation = 0;
   private saveFailed = false;
   private failure?: PeerStatus['failure'];
+  private addressCode?: AddressCode;
   private saving: Promise<void> = Promise.resolve();
   constructor(readonly host: string, private readonly notify: (status: PeerStatus) => void) {}
   private status() {
@@ -36,7 +37,7 @@ export class PhoneCompanion implements Controller {
     if (this.ready) return this.ready;
     const generation = this.generation;
     let stage: NonNullable<PeerStatus['failure']> = 'address';
-    this.failure = undefined;
+    this.failure = undefined; this.addressCode = undefined;
     this.notify({});
     this.ready = (async () => {
       if (!native) { this.notify({ unavailable: true }); throw new Error('An iPhone development build is required'); }
@@ -70,7 +71,7 @@ export class PhoneCompanion implements Controller {
       this.controller = new CompanionController(this.host, service.localExchange);
       this.timer = setInterval(() => { if (this.active) { void coordinator.poll(); this.status(); } }, 2000);
       this.status(); return this.controller;
-    })().catch(error => { if (generation === this.generation) { this.failure = native ? stage : undefined; this.stop(); this.notify(native ? { startFailed: true, failure: this.failure } : { unavailable: true }); } throw error; });
+    })().catch(error => { if (generation === this.generation) { this.failure = native ? stage : undefined; this.addressCode = stage === 'address' && error instanceof LocalAddressError ? error.code : undefined; this.stop(); this.notify(native ? { startFailed: true, failure: this.failure, ...(this.addressCode && { addressCode: this.addressCode }) } : { unavailable: true }); } throw error; });
     return this.ready;
   }
   private stop() {
@@ -85,7 +86,7 @@ export class PhoneCompanion implements Controller {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined; this.ready = undefined;
     native?.stop();
-    this.notify(this.failure ? { failure: this.failure } : {});
+    this.notify(this.failure ? { failure: this.failure, ...(this.addressCode && { addressCode: this.addressCode }) } : {});
   }
   async acceptInvitation(text: string) { await this.ensure(); this.service!.acceptInvitation(text); this.status(); }
   approve() { this.service?.approve(); this.status(); }

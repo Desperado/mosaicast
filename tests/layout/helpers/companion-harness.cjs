@@ -19,8 +19,8 @@ exports.companionHarness = async () => {
         const [peerStatus,setPeerStatus] = useState({connected:true});
         const text = window.testLanguage === 'uk' ? uk : en;
         const connectCompanion = async () => { window.connectCalls = (window.connectCalls || 0) + 1;
-          return new Promise(resolve => { window.finishConnection = success => {
-            setPeerStatus(success ? {qr:true,expires:Date.now()+300000} : {failure:'receiver'}); resolve(success);
+          return new Promise(resolve => { window.finishConnection = (success, failure = 'receiver') => {
+            setPeerStatus(success ? {qr:true,expires:Date.now()+300000} : {failure, ...(failure === 'address' && {addressCode:'WIFI_NO_IPV4'})}); resolve(success);
           }; }); };
         window.finishPairing = () => setPeerStatus({connected:true});
         return <Context.Provider value={{t:key=>text[key],colors:themes.dark,ready:true,real:true,

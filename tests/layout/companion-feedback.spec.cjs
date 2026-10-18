@@ -32,6 +32,10 @@ for (const language of ['en', 'uk']) for (const [width,height] of [[320,568],[93
     await expect(page.getByText(t.pairingReceiverFailed,{exact:true})).toBeInViewport({ratio:1});
     await expect(page.getByText('192.168.1.20',{exact:true})).toBeInViewport({ratio:1});
     await scan.click(); await page.evaluate(() => window.scanValid());
+    await page.evaluate(() => window.finishConnection(false, 'address'));
+    await expect(page.getByText(t.pairingAddressFailed,{exact:true})).toBeInViewport({ratio:1});
+    await expect(page.getByText(`${t.pairingAddressDiagnostic}: WIFI_NO_IPV4`,{exact:true})).toBeInViewport({ratio:1});
+    await scan.click(); await page.evaluate(() => window.scanValid());
     await page.evaluate(() => window.finishConnection(true));
     await expect(page.getByText(t.phoneTVWaiting,{exact:true})).toBeInViewport({ratio:1});
     await page.evaluate(() => window.finishPairing());

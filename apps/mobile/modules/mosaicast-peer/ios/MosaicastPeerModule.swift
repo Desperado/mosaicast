@@ -16,6 +16,7 @@ public final class MosaicastPeerModule: Module {
         if ready { promise.resolve(nil) } else { promise.reject("ERR_PEER_LISTEN", "Local listener unavailable. Check Wi-Fi and local-network permission.") }
       }
     }
+    Function("localAddress") { LocalAddress.read() }
     Function("stop") { self.server.stop() }
     Function("respond") { (id: String, status: Int, body: String) in self.server.respond(id, status, body) }
     Function("randomHex") { (length: Int) -> String in

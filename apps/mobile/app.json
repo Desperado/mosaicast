@@ -16,7 +16,7 @@
         }
       },
       "bundleIdentifier": "io.github.desperado.mosaicast",
-      "buildNumber": "19"
+      "buildNumber": "20"
     },
     "android": {
       "permissions": [

@@ -99,6 +99,7 @@ export default function Companion() {
         : peerStatus.failure === 'storage' ? 'pairingStorageFailed'
         : peerStatus.failure === 'listener' ? 'pairingListenerFailed'
         : peerStatus.failure === 'receiver' ? 'pairingReceiverFailed' : 'pairingFailed')}</Copy>
+      {peerStatus.failure === 'address' && peerStatus.addressCode && <Copy>{t('pairingAddressDiagnostic')}: {peerStatus.addressCode}</Copy>}
       {peerStatus.failure === 'receiver' && <Copy>{deviceState.host}</Copy>}
     </Card>}
     {peerStatus.saveFailed && <Copy accessibilityRole="alert">{t('phoneSaveFailed')}</Copy>}
