@@ -87,6 +87,17 @@ cannot be reused as a TestFlight upload.
 
 ## Local iPhone builds
 
+Mosaicast Dev `0.1.0 (16)` was built locally on 18 October 2026 from the
+code in `a88436f`. Native compilation, bundle identity/build-number checks and
+deep strict code-signature verification passed. It clears live pairing status
+when the phone listener stops, explains a missing phone address, allows scanning
+a new TV QR from the connected screen, and distinguishes a local startup failure
+from a missing native module. EN/UK help allows an Ethernet TV with a Wi-Fi phone.
+Build 16 was installed in place on the physical iPhone; devicectl verified the
+installed bundle version as `16`. Automatic launch was rejected because the
+iPhone was locked. Open Mosaicast Dev manually after unlocking; simultaneous
+phone/TV acceptance remains to be confirmed.
+
 Mosaicast Dev `0.1.0 (15)` was built locally on 18 October 2026 from commit
 `90cf676`. Native compilation, bundle identity/build-number checks and code-
 signature verification passed. It fixes post-pairing refresh contention and
