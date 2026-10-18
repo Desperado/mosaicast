@@ -171,3 +171,39 @@ test('failed confirmation reads stay bounded and require Refresh without repeati
   assert.equal(writes(calls).length, 1);
   assert.equal(calls.filter(call => call.route === 'main/getStatus').length, 6);
 });
+
+test('volume and mute confirm status without waiting for optional metadata; background reads still refresh it', async () => {
+  const { client, calls } = device();
+  const before = await client.read();
+  const track = JSON.parse(JSON.stringify(before.track));
+  before.track.title = 'Caller changed its copy';
+  calls.length = 0;
+  const louder = await client.execute({ type: 'volume', value: 'up' });
+  assert.equal(louder.status.volume, 13);
+  assert.deepEqual(louder.track, track);
+  louder.track.title = 'Another caller changed its copy';
+  assert.deepEqual(calls.map(call => call.route), ['main/getStatus', 'main/setVolume', 'main/getStatus']);
+  calls.length = 0;
+  const muted = await client.execute({ type: 'mute', value: true });
+  assert.equal(muted.status.mute, true);
+  assert.deepEqual(muted.track, track);
+  assert.deepEqual(calls.map(call => call.route), ['main/getStatus', 'main/setMute', 'main/getStatus']);
+  calls.length = 0;
+  await client.read();
+  assert.ok(calls.some(call => call.route === 'netusb/getPlayInfo'));
+});
+
+test('sound changes cannot reuse metadata from an externally changed input', async () => {
+  let input = 'deezer';
+  const calls = [];
+  const client = new MusicCastClient(host, async value => {
+    const route = new URL(String(value)).pathname.split('/').pop(); calls.push(route);
+    const data = route === 'getDeviceInfo' ? { model_name: 'Fixture' } : route === 'getFeatures' ? features() : route === 'getStatus' ? { power: 'on', input, volume: 12, mute: true } : route === 'getPlayInfo' ? { input, track: 'Old track', playback: 'pause' } : {};
+    return new Response(JSON.stringify({ response_code: 0, ...data }));
+  });
+  assert.equal((await client.read()).track.title, 'Old track');
+  input = 'cd';
+  const result = await client.execute({ type: 'mute', value: true });
+  assert.equal(result.status.input, 'cd');
+  assert.equal(result.track, undefined);
+});

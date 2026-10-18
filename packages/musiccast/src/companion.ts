@@ -25,6 +25,7 @@ export interface CompanionState {
   needsReconcile: boolean;
   activity?: 'read' | 'command' | 'menu';
   menuOwner?: string;
+  menu?: BrowsePage;
 }
 export type CompanionCode = 'busy' | 'generation' | 'sequence' | 'invalid' | 'reconcile' | 'owned' | 'browseChanged' | 'browseUnavailable' | 'browseReadError' | 'offline';
 export interface CompanionReply {
@@ -79,7 +80,7 @@ export class CompanionCoordinator {
   }
   get state(): CompanionState { return clone(this.current); }
   private invalidation = 0;
-  invalidate() { this.invalidation++; this.publish({ needsReconcile: true, freshness: 'stale' }); }
+  invalidate() { this.invalidation++; this.publish({ needsReconcile: true, freshness: 'stale', menu: undefined }); }
   revokeClients() {
     if (this.operating) return false;
     this.clients.clear(); this.release(); return true;
@@ -93,7 +94,7 @@ export class CompanionCoordinator {
     this.current = { ...this.current, ...patch, revision: this.current.revision + 1 };
     for (const listener of this.listeners) { try { listener(this.state); } catch { /* A disconnected observer cannot interrupt a device operation. */ } }
   }
-  private release() { this.lease = undefined; this.publish({ menuOwner: undefined }); }
+  private release() { this.lease = undefined; this.publish({ menuOwner: undefined, menu: undefined }); }
   private reply(sequence: number, outcome: CompanionReply['outcome'], code?: CompanionCode): CompanionReply {
     return { sequence, outcome, state: this.state, ...(code ? { code } : {}) };
   }
@@ -128,9 +129,9 @@ export class CompanionCoordinator {
     return result.then(clone);
   }
   private async perform(client: string, { sequence, operation: op }: CompanionRequest): Promise<CompanionReply> {
-    // A read-only Refresh may wait for a background read. Commands and menu
-    // operations still reject concurrent work and are never queued or replayed.
-    if (op.type === 'reconcile' && this.polling) await this.polling;
+    // Refresh and opening a menu only read Yamaha state, so they may wait for
+    // a background read. Writes still reject concurrent work and never queue.
+    if ((op.type === 'reconcile' || op.type === 'browse') && this.polling) await this.polling;
     if (this.operating) return this.reply(sequence, 'rejected', 'busy');
     if (this.lease && this.now() >= this.lease.expires) this.release();
     if (op.type === 'release') {
@@ -158,7 +159,7 @@ export class CompanionCoordinator {
       } else {
         if (op.type === 'browse') {
           this.lease = { owner: client, token: String(++this.leaseSequence), expires: this.now() + 45000 };
-          this.publish({ menuOwner: client });
+          this.publish({ menuOwner: client, menu: undefined });
           page = await this.controller.browse(op.input, op.index);
         } else {
           const result = await this.controller.browseAction(op.action);
@@ -167,6 +168,7 @@ export class CompanionCoordinator {
           if (op.action.type === 'play') outcome = 'accepted';
         }
         this.lease!.expires = this.now() + 45000;
+        this.publish({ menu: page });
       }
     } catch (error) {
       const browseCode = error instanceof BrowseError ? error.code : undefined;
@@ -202,12 +204,12 @@ export class CompanionController implements Controller {
   private active = true;
   private observationFailed = false;
   private observing?: Promise<CompanionState>;
-  private readonly observers = new Set<(state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean }) => void>();
+  private readonly observers = new Set<(state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean; browse?: BrowsePage }) => void>();
   setActive(active: boolean) { this.active = active; }
   private emit(stale = this.current?.freshness !== 'fresh') {
-    for (const listener of this.observers) listener({ snapshot: this.current?.snapshot, stale, needsRefresh: this.uncertain || !!this.current?.needsReconcile });
+    for (const listener of this.observers) listener({ snapshot: this.current?.snapshot, stale, needsRefresh: this.uncertain || !!this.current?.needsReconcile, browse: this.current?.menu });
   }
-  watch(listener: (state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean }) => void) {
+  watch(listener: (state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean; browse?: BrowsePage }) => void) {
     this.observers.add(listener); this.emit();
     const timer = setInterval(() => {
       if (!this.active || this.operating) return;

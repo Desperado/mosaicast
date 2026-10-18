@@ -15,6 +15,7 @@ export class MusicCastClient implements Controller {
   private operating = false;
   private page?: BrowsePage;
   private revision = 0;
+  private lastSnapshot?: Snapshot;
 
   constructor(readonly host: string, private readonly fetcher: Fetch = (url, options) => globalThis.fetch(url, options), private readonly delay = wait) {
     if (!privateIPv4(host)) throw new Error('Enter a private IPv4 address, such as 192.168.1.50.');
@@ -91,7 +92,19 @@ export class MusicCastClient implements Controller {
       try { bluetooth = await this.readBluetooth(); }
       catch { /* Optional Bluetooth failures must not disable the main player. */ }
     }
-    return { model: this.model, features, status, track, trackUnavailable, tuner, bluetooth };
+    const snapshot = { model: this.model, features, status, track, trackUnavailable, tuner, bluetooth };
+    this.lastSnapshot = JSON.parse(JSON.stringify(snapshot));
+    return snapshot;
+  }
+
+  private soundSnapshot(status: Status): Promise<Snapshot> {
+    // Volume/mute are confirmed by getStatus. Optional metadata must not hold
+    // these controls busy; the next normal read refreshes it on both screens.
+    const previous = this.lastSnapshot;
+    if (previous && previous.status.input === status.input && previous.status.power === status.power) {
+      return Promise.resolve({ ...JSON.parse(JSON.stringify(previous)), status });
+    }
+    return this.snapshot(status);
   }
 
   execute(command: Command): Promise<Snapshot> {
@@ -128,7 +141,7 @@ export class MusicCastClient implements Controller {
           break;
         case 'mute':
           if (typeof status.mute !== 'boolean') throw new Error('Mute state is unavailable. Refresh before trying again.');
-          if (status.mute === command.value) return this.snapshot(status);
+          if (status.mute === command.value) return this.soundSnapshot(status);
           route = 'main/setMute'; params = { enable: String(command.value) }; confirms = value => value.mute === command.value;
           break;
         case 'volume': {
@@ -136,7 +149,7 @@ export class MusicCastClient implements Controller {
           if (status.power !== 'on' || status.volume === undefined || !range) throw new Error('Volume controls are unavailable for this state.');
           const max = Math.min(range.max, status.maxVolume ?? range.max);
           const target = Math.max(range.min, Math.min(max, status.volume + (command.value === 'up' ? range.step : -range.step)));
-          if (target === status.volume) return this.snapshot(status);
+          if (target === status.volume) return this.soundSnapshot(status);
           route = 'main/setVolume'; params = { volume: command.value }; confirms = value => value.volume === target;
           break;
         }
@@ -156,7 +169,7 @@ export class MusicCastClient implements Controller {
           continue;
         }
         if (!confirms || confirms(updated)) {
-          const snapshot = await this.snapshot(updated);
+          const snapshot: Snapshot = await (command.type === 'volume' || command.type === 'mute' ? this.soundSnapshot(updated) : this.snapshot(updated));
           if (command.type !== 'playback' || !['play', 'pause'].includes(command.value) || snapshot.track?.playback === command.value) return snapshot;
         }
       }

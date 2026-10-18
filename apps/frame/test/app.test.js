@@ -8,7 +8,8 @@ import { randomBytes, webcrypto } from 'node:crypto';
 
 // Run the real TV bundle with a small DOM fixture. No device or browser is contacted.
 async function launch(tizen, { storage = new Map(), storageUnavailable = false, remote: remoteState = {}, defaultHost = '', companionFetch, webapis, discoveryFetch } = {}) {
-  let document, pollPlayer;
+  let document;
+  const intervals = new Map();
   class Element {
     constructor(tagName) {
       this.tagName = tagName.toUpperCase(); this.children = []; this.dataset = {}; this.attributes = {};
@@ -65,7 +66,7 @@ async function launch(tizen, { storage = new Map(), storageUnavailable = false, 
   Object.assign(remote, remoteState);
   const rootMenu = { layer: remote.layer, menu: remote.menu, items: remote.items };
   const context = createContext({
-    document, tizen, webapis, URL, URLSearchParams, TextEncoder, TextDecoder, crypto: webcrypto, AbortController, setTimeout, clearTimeout, setInterval(callback) { pollPlayer = callback; }, clearInterval() {},
+    document, tizen, webapis, URL, URLSearchParams, TextEncoder, TextDecoder, crypto: webcrypto, AbortController, setTimeout, clearTimeout, setInterval(callback) { const id = {}; intervals.set(id, callback); return id; }, clearInterval(id) { intervals.delete(id); },
     localStorage: {
       getItem(key) { if (storageUnavailable) throw new Error('Storage unavailable'); return storage.get(key) ?? null; },
       setItem(key, value) { if (storageUnavailable) throw new Error('Storage unavailable'); storage.set(key, value); }
@@ -111,7 +112,7 @@ async function launch(tizen, { storage = new Map(), storageUnavailable = false, 
     assert.equal(nodes.get('connection-badge').textContent, 'YAMAHA CONNECTED', nodes.get('message').textContent);
     assert.equal(nodes.get('connection-badge').hidden, false);
   };
-  const poll = async () => { pollPlayer(); await settle(); };
+  const poll = async () => { for (const callback of [...intervals.values()]) callback(); await settle(); };
   return { nodes, document, remote, calls, storage, key, settle, connect, poll };
 }
 
@@ -1135,8 +1136,8 @@ test('leaving shared setup cancels all discovery probes and ignores late results
 
 test('a shared Refresh clears the TV recovery warning without hiding unrelated errors', async () => {
   const snapshot = {model: 'Shared fixture', features: {controls: ['volume'], connectivity: [], sources: [{id: 'deezer', name: 'Deezer', networkPlayer: true}], volumeRange: {min: 0, max: 30, step: 1}}, status: {power: 'on', input: 'deezer', volume: 10}, trackUnavailable: false};
-  let readFailed = false;
-  const coordinator = new shared.CompanionCoordinator({read: async () => { if (readFailed) throw new Error('receiver unavailable'); return snapshot; }}, 'ui-fixture');
+  let readFailed = false, finishCommand;
+  const coordinator = new shared.CompanionCoordinator({read: async () => { if (readFailed) throw new Error('receiver unavailable'); return snapshot; }, execute: async () => { await new Promise(resolve => { finishCommand = resolve; }); return snapshot; }}, 'ui-fixture');
   const pairing = {url: 'http://192.168.1.10:8095', receiver: '192.168.1.20', id: randomBytes(16).toString('hex'), key: randomBytes(32).toString('hex')};
   const phone = new shared.PhonePeerService(pairing.receiver, pairing.url, coordinator, n => new Uint8Array(randomBytes(n)), pairing, async () => {});
   const app = await launch({keymanager: {getData: () => JSON.stringify(pairing)}}, {
@@ -1153,6 +1154,12 @@ test('a shared Refresh clears the TV recovery warning without hiding unrelated e
   assert.equal(app.nodes.get('connection-badge').textContent, 'COMPANION CONNECTED');
   assert.equal(app.nodes.get('message').textContent, '');
   assert.equal(app.nodes.get('volume-up').disabled, false);
+  const pending = handset.execute({type: 'volume', value: 'up'});
+  await app.settle(); await app.poll();
+  assert.equal(coordinator.state.activity, 'command');
+  assert.equal(app.nodes.get('connection-badge').textContent, 'COMPANION CONNECTED', 'ordinary phone activity keeps a stable connection badge');
+  assert.equal(app.nodes.get('message').textContent, '');
+  finishCommand(); await pending;
   readFailed = true; await coordinator.poll(); await app.poll();
   assert.equal(app.nodes.get('connection-badge').textContent, 'RECONNECTING');
   assert.match(app.nodes.get('message').textContent, /Reconnecting/);
@@ -1166,4 +1173,56 @@ test('a shared Refresh clears the TV recovery warning without hiding unrelated e
   await coordinator.poll(); await app.poll();
   assert.equal(app.nodes.get('message').textContent, 'Deezer menu unavailable');
   assert.equal(app.calls.length, 0);
+});
+
+test('TV offers menu takeover beside Browse and follows the phone page without moving local navigation', async () => {
+  const snapshot = {model: 'Shared fixture', features: {controls: ['volume'], connectivity: [], sources: [{id: 'deezer', name: 'Deezer', networkPlayer: true}, {id: 'usb', name: 'USB', networkPlayer: true}], volumeRange: {min: 0, max: 30, step: 1}}, status: {power: 'on', input: 'deezer', volume: 10}, trackUnavailable: false};
+  let revision = 0, title = 'Deezer', writes = 0;
+  const page = input => ({input, token: String(++revision), layer: title === 'Deezer' ? 0 : 1, title, index: 0, total: 1, items: [{index: 0, text: title === 'Deezer' ? 'Charts' : 'Popular songs', selectable: true, playable: false, searchable: false}]});
+  const coordinator = new shared.CompanionCoordinator({read: async () => snapshot, execute: async () => { writes++; return snapshot; }, browse: async input => page(input), browseAction: async () => { writes++; title = 'Charts'; return {page: page('deezer')}; }}, 'menu-ui');
+  const pairing = {url: 'http://192.168.1.10:8095', receiver: '192.168.1.20', id: randomBytes(16).toString('hex'), key: randomBytes(32).toString('hex')};
+  const service = new shared.PhonePeerService(pairing.receiver, pairing.url, coordinator, n => new Uint8Array(randomBytes(n)), pairing, async () => {});
+  const companionFetch = async (url, options = {}) => {
+    const result = await service.handle(options.method || 'GET', new URL(url).pathname, options.body ? JSON.parse(options.body) : undefined);
+    return {ok: true, text: async () => JSON.stringify(result)};
+  };
+  const app = await launch({keymanager: {getData: () => JSON.stringify(pairing)}}, {storage: new Map([['mosaicast-mode', 'companion']]), companionFetch});
+  app.nodes.get('refresh').click(); await app.settle();
+  const phone = new shared.CompanionController(pairing.receiver, service.localExchange);
+  await phone.browse('deezer');
+  sourceButton(app, 'Browse Deezer').click(); await app.settle();
+  const takeover = app.nodes.get('continue-menu');
+  assert.match(app.nodes.get('message').textContent, /Take over menu/);
+  assert.equal(takeover.hidden, false);
+  assert.equal(takeover.dataset.input, 'deezer');
+  assert.equal(app.nodes.get('overlay').hidden, true);
+  takeover.focus(); app.key('Enter', 13); await app.settle();
+  assert.equal(app.nodes.get('menu-title').textContent, 'Deezer');
+  assert.equal(takeover.hidden, true); assert.equal(writes, 0);
+
+  const remote = await phone.browse('deezer', 0, true);
+  await phone.browseAction({type: 'select', token: remote.token, index: 0});
+  await app.poll();
+  assert.equal(app.nodes.get('menu-title').textContent, 'Charts');
+  assert.match(app.nodes.get('menu').textContent, /Popular songs/);
+  const focused = app.document.activeElement;
+  await app.poll();
+  assert.equal(app.document.activeElement, focused, 'unchanged pages must not rebuild the menu');
+  title = 'Updated Charts'; revision--;
+  await phone.browse('deezer'); await app.poll();
+  assert.equal(app.nodes.get('menu-title').textContent, 'Updated Charts', 'changed contents must update even if a restarted coordinator reuses a token');
+  assert.equal(writes, 1, 'following the phone is read-only');
+  app.nodes.get('menu').children[0].click(); await app.settle();
+  assert.equal(writes, 1, 'following a page cannot borrow the phone lease');
+  assert.equal(takeover.hidden, false);
+  app.nodes.get('now-playing').click();
+  await phone.browse('deezer'); await app.poll();
+  assert.equal(app.nodes.get('track-panel').hidden, false, 'phone navigation must not open Browse over Now Playing');
+
+  app.nodes.get('sources').click();
+  sourceButton(app, 'Browse USB').click(); await app.settle();
+  assert.equal(takeover.dataset.input, 'usb');
+  takeover.click(); await app.settle();
+  assert.equal(app.nodes.get('browse-label').textContent, 'USB');
+  assert.equal(writes, 1, 'explicit takeover only reads the requested menu');
 });

@@ -68,7 +68,6 @@ export default function Listen() {
           <View accessible accessibilityRole="progressbar" accessibilityLabel={volumeLabel} accessibilityValue={{ min: range?.min, max: maxVolume, now: volume }} style={{ height: 4, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' }}>
             <View style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%`, height: '100%', backgroundColor: colors.accent }}/>
           </View>
-          <Copy kind="small" lines={1} style={{ minHeight: 19 }}>{pendingCommand?.type === 'volume' && real ? t('pending') : ' '}</Copy>
         </Card>
       </View>
     </View>

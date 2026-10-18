@@ -63,6 +63,7 @@ export class DeviceSession {
       this.stopWatching = controller.watch?.(observed => {
         if (generation !== this.generation) return;
         this.update({ ...(observed.snapshot ? { snapshot: observed.snapshot } : {}),
+          ...('browse' in observed ? { browse: observed.browse } : {}),
           phase: observed.stale ? 'stale' : 'connected', needsRefresh: observed.needsRefresh || (this.state.needsRefresh && this.state.error === 'uncertainError'),
           ...(observed.needsRefresh ? { error: this.state.error === 'uncertainError' ? 'uncertainError' : 'refreshRequired' }
             : this.state.error === 'refreshRequired' ? { error: undefined } : {}) });
@@ -165,7 +166,10 @@ export class DeviceSession {
       const browse = await controller.browse(input, index, takeover);
       if (generation === this.generation) this.update({ browse });
     } catch (error) {
-      if (generation === this.generation) this.update({ browse: undefined, browseError: error instanceof BrowseError ? error.code : 'browseReadError' });
+      if (generation === this.generation) this.update({
+        browse: error instanceof BrowseError && error.code === 'companionOwned' && this.state.browse?.input === input ? this.state.browse : undefined,
+        browseError: error instanceof BrowseError ? error.code : 'browseReadError',
+      });
     } finally { if (generation === this.generation) this.update({ busy: false }); }
   }
 
