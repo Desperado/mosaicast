@@ -48,7 +48,15 @@ export function createTVPeerController(record: PeerRecord, random: PeerRandom, u
       // The phone lease is 12s but a menu action may take far longer. Observation-only
       // heartbeats keep it alive; they carry no operation, so nothing is replayed.
       const heartbeat = request ? setInterval(() => { if (remote === current && active && !closed) void current().catch(() => {}); }, 4000) : undefined;
-      try { return await current(request); }
+      try {
+        try { return await current(request); }
+        catch (error) {
+          // A missed cached status reply does not mean authority changed. Retry
+          // only observation, on the same session; mutations are never replayed.
+          if (request || !active || closed || remote !== current) throw error;
+          return await current();
+        }
+      }
       catch {
         if (remote === current) { remote = undefined; local = coordinator(); recoverAt = now() + 60000; }
         // Never forward a failed remote operation into the local coordinator.

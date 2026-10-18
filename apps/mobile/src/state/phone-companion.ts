@@ -1,9 +1,9 @@
 import { requireOptionalNativeModule } from 'expo';
 import { CompanionController, CompanionCoordinator, MusicCastClient, PhonePeerService, peerDeviceFetch, type Controller, type PeerRandom } from '@mosaicast/musiccast';
-import { localSearchAddress } from './discovery';
+import { localSearchAddress, LocalAddressError, type AddressCode } from './discovery';
 import { loadPairing, savePairing } from './pairing-store';
 
-export type PeerStatus = { url?: string; comparison?: string; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean };
+export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; expires?: number; connected?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; startFailed?: boolean; failure?: 'address' | 'storage' | 'listener' | 'receiver'; saveFailed?: boolean; addressCode?: AddressCode };
 type PeerRequest = { id: string; method: string; path: string; body: string };
 type PeerNative = {
   addListener(event: 'request', listener: (event: PeerRequest) => void): { remove(): void };
@@ -23,38 +23,55 @@ export class PhoneCompanion implements Controller {
   private active = true;
   private closed = false;
   private generation = 0;
+  private saveFailed = false;
+  private failure?: PeerStatus['failure'];
+  private addressCode?: AddressCode;
+  private saving: Promise<void> = Promise.resolve();
   constructor(readonly host: string, private readonly notify: (status: PeerStatus) => void) {}
   private status() {
     const service = this.service;
-    this.notify(service ? { url: service.url, ...service.pairing, paired: service.paired, waiting: service.waitingForTV } : {});
+    this.notify(service ? { url: service.url, ...service.pairing, paired: service.paired, connected: service.tvConnected, saveFailed: this.saveFailed, waiting: service.waitingForTV } : {});
   }
   private ensure() {
     if (!this.active || this.closed) return Promise.reject(new Error('Inactive'));
     if (this.ready) return this.ready;
     const generation = this.generation;
+    let stage: NonNullable<PeerStatus['failure']> = 'address';
+    this.failure = undefined; this.addressCode = undefined;
+    this.notify({});
     this.ready = (async () => {
       if (!native) { this.notify({ unavailable: true }); throw new Error('An iPhone development build is required'); }
       await this.draining;
-      const address = await localSearchAddress(), record = await loadPairing();
+      await this.saving.catch(() => {});
+      const address = await localSearchAddress();
+      stage = 'storage';
+      const record = await loadPairing();
       if (generation !== this.generation) throw new Error('Inactive');
       const random: PeerRandom = length => Uint8Array.from(native.randomHex(length).match(/../g)!, byte => parseInt(byte, 16));
       const coordinator = new CompanionCoordinator(new MusicCastClient(this.host, peerDeviceFetch(() => !!this.service?.canControl && generation === this.generation)), native.randomHex(16));
-      const service = new PhonePeerService(this.host, `http://${address}:8095`, coordinator, random, record, async value => { await savePairing(value); this.status(); });
+      const service = new PhonePeerService(this.host, `http://${address}:8095`, coordinator, random, record, async value => {
+        const saving = savePairing(value); this.saving = saving;
+        try { await saving; this.saveFailed = false; }
+        catch (error) { this.saveFailed = true; throw error; }
+        finally { if (generation === this.generation) this.status(); }
+      });
       this.service = service; this.coordinator = coordinator;
       this.subscription = native.addListener('request', event => {
         if (generation !== this.generation) return;
         void Promise.resolve().then(() => service.handle(event.method, event.path, event.body ? JSON.parse(event.body) : undefined))
           .then(value => native.respond(event.id, 200, JSON.stringify(value)), () => native.respond(event.id, 400, '{}')).finally(() => this.status());
       });
+      stage = 'listener';
       await native.start(address);
       if (generation !== this.generation) throw new Error('Inactive');
+      stage = 'receiver';
       await coordinator.poll();
       // A stop during this read retired the generation; never install its controller or timer.
       if (generation !== this.generation) throw new Error('Inactive');
       this.controller = new CompanionController(this.host, service.localExchange);
       this.timer = setInterval(() => { if (this.active) { void coordinator.poll(); this.status(); } }, 2000);
       this.status(); return this.controller;
-    })().catch(error => { if (generation === this.generation) { this.stop(); this.notify({ unavailable: true }); } throw error; });
+    })().catch(error => { if (generation === this.generation) { this.failure = native ? stage : undefined; this.addressCode = stage === 'address' && error instanceof LocalAddressError ? error.code : undefined; this.stop(); this.notify(native ? { startFailed: true, failure: this.failure, ...(this.addressCode && { addressCode: this.addressCode }) } : { unavailable: true }); } throw error; });
     return this.ready;
   }
   private stop() {
@@ -69,11 +86,13 @@ export class PhoneCompanion implements Controller {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined; this.ready = undefined;
     native?.stop();
+    this.notify(this.failure ? { failure: this.failure, ...(this.addressCode && { addressCode: this.addressCode }) } : {});
   }
+  async acceptInvitation(text: string) { await this.ensure(); this.service!.acceptInvitation(text); this.status(); }
   approve() { this.service?.approve(); this.status(); }
   cancelPairing() { this.service?.cancelPairing(); this.status(); }
   takeControl() { this.service?.takeControl(); this.status(); }
-  close() { this.closed = true; this.stop(); this.notify({}); }
+  close() { this.closed = true; this.stop(); }
   // Restart the listener on return even while a Refresh is pending, so the TV
   // can reconnect. Device reads and writes still wait for the user.
   setActive(active: boolean) {
@@ -81,7 +100,17 @@ export class PhoneCompanion implements Controller {
     if (!active) this.stop();
     else if (!this.closed) void this.ensure().catch(() => {});
   }
-  async read() { return (await this.ensure()).read(); }
+  async read() {
+    const generation = this.generation;
+    const controller = await this.ensure();
+    try { return await controller.read(); }
+    catch (error) {
+      // DeviceSession closes a failed initial connection. Keep only the safe
+      // failure stage through that cleanup, never a retired phone URL.
+      if (generation === this.generation) { this.failure = 'receiver'; this.notify({ failure: this.failure }); }
+      throw error;
+    }
+  }
   async reconcile() { return (await this.ensure()).reconcile(); }
   async execute(command: Parameters<Controller['execute']>[0]) { return (await this.ensure()).execute(command); }
   async browse(input: string, index = 0, takeover = false) { return (await this.ensure()).browse(input, index, takeover); }

@@ -41,7 +41,7 @@ export const companionInfo = snapshot => snapshot.track ? {
   playback: snapshot.track.playback, play_time: snapshot.track.elapsed, total_time: snapshot.track.duration, albumart_url: snapshot.track.artwork,
 } : snapshot.trackUnavailable ? { error: 'Playback information unavailable' } : {};
 export function companionMenu(page) {
-  return { input: page.input, menu_layer: page.layer, menu_name: page.title, index: page.index, max_line: page.total,
+  return { input: page.input, token: page.token, menu_layer: page.layer, menu_name: page.title, index: page.index, max_line: page.total,
     list_info: page.items.map(item => ({ text: item.text, attribute: (item.selectable ? 2 : 0) | (item.playable ? 4 : 0) | (item.searchable ? 8 : 0) })) };
 }
 export function companionMessage(error) {
@@ -69,7 +69,7 @@ export class FrameCompanion {
   async run(work) {
     if (this.pending) throw new Error('Yamaha is busy. Wait, then try again.');
     this.pending++;
-    try { return await work(); } catch (error) { throw new Error(companionMessage(error)); }
+    try { return await work(); } catch (error) { throw Object.assign(new Error(companionMessage(error)), { code: error.code }); }
     finally { this.pending--; }
   }
   async request(route, params = {}) {
@@ -96,16 +96,20 @@ export class FrameCompanion {
   async power(value) { return companionStatus(await this.command({ type: 'power', value })); }
   async selectInput(value) { return companionStatus(await this.command({ type: 'input', value })); }
   async list(index = 0, input = 'deezer', takeover = false) {
-    this.page = await this.run(() => this.controller.browse(input, index, takeover));
-    return companionMenu(this.page);
+    try {
+      this.page = await this.run(() => this.controller.browse(input, index, takeover));
+      return companionMenu(this.page);
+    } catch (error) { error.menuInput = input; throw error; }
   }
   async control(type, index) { return this.menuAction(type === 'return' ? { type: 'back' } : { type, index }); }
   async search(index, text) { return this.menuAction({ type: 'search', index, text }); }
   async menuAction(action) {
     if (!this.page) throw new Error('Refresh the shared menu first.');
-    const result = await this.run(() => this.controller.browseAction({ ...action, token: this.page.token }));
-    this.page = result.page;
-    return companionMenu(this.page);
+    try {
+      const result = await this.run(() => this.controller.browseAction({ ...action, token: this.page.token }));
+      this.page = result.page;
+      return companionMenu(this.page);
+    } catch (error) { error.menuInput = this.page.input; throw error; }
   }
   async reconcile() { return this.run(() => this.controller.reconcile()); }
   watch(listener) { return this.controller.watch(listener); }

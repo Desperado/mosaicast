@@ -12,11 +12,7 @@ final class PeerHTTP {
   var request: ((String, String, String, String) -> Void)?
 
   static func privateAddress(_ value: String) -> Bool {
-    let parts = value.split(separator: ".", omittingEmptySubsequences: false)
-    guard parts.count == 4 else { return false }
-    let numbers = parts.compactMap { Int($0) }
-    guard numbers.count == 4, zip(parts, numbers).allSatisfy({ String($0.1) == $0.0 }), numbers.allSatisfy({ (0...255).contains($0) }), (1...254).contains(numbers[3]) else { return false }
-    return numbers[0] == 10 || (numbers[0] == 192 && numbers[1] == 168) || (numbers[0] == 172 && (16...31).contains(numbers[1]))
+    LocalAddress.privateIPv4(value)
   }
   func start(_ address: String, completion: @escaping (Bool) -> Void) {
     queue.async {

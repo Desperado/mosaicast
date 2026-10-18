@@ -25,6 +25,7 @@ export interface CompanionState {
   needsReconcile: boolean;
   activity?: 'read' | 'command' | 'menu';
   menuOwner?: string;
+  menu?: BrowsePage;
 }
 export type CompanionCode = 'busy' | 'generation' | 'sequence' | 'invalid' | 'reconcile' | 'owned' | 'browseChanged' | 'browseUnavailable' | 'browseReadError' | 'offline';
 export interface CompanionReply {
@@ -73,12 +74,13 @@ export class CompanionCoordinator {
   private lease?: { owner: string; token: string; expires: number };
   private leaseSequence = 0;
   private operating = false;
+  private polling?: Promise<void>;
   constructor(private readonly controller: Controller, generation: string, private readonly now = Date.now) {
     this.current = { version: 1, generation, revision: 0, freshness: 'stale', needsReconcile: true };
   }
   get state(): CompanionState { return clone(this.current); }
   private invalidation = 0;
-  invalidate() { this.invalidation++; this.publish({ needsReconcile: true, freshness: 'stale' }); }
+  invalidate() { this.invalidation++; this.publish({ needsReconcile: true, freshness: 'stale', menu: undefined }); }
   revokeClients() {
     if (this.operating) return false;
     this.clients.clear(); this.release(); return true;
@@ -92,16 +94,20 @@ export class CompanionCoordinator {
     this.current = { ...this.current, ...patch, revision: this.current.revision + 1 };
     for (const listener of this.listeners) { try { listener(this.state); } catch { /* A disconnected observer cannot interrupt a device operation. */ } }
   }
-  private release() { this.lease = undefined; this.publish({ menuOwner: undefined }); }
+  private release() { this.lease = undefined; this.publish({ menuOwner: undefined, menu: undefined }); }
   private reply(sequence: number, outcome: CompanionReply['outcome'], code?: CompanionCode): CompanionReply {
     return { sequence, outcome, state: this.state, ...(code ? { code } : {}) };
   }
   async poll() {
+    if (this.polling) return this.polling;
     if (this.operating) return;
     this.operating = true;
-    try { this.publish({ snapshot: await this.controller.read(), freshness: 'fresh' }); }
-    catch { this.publish({ freshness: 'stale' }); }
-    finally { this.operating = false; }
+    this.polling = (async () => {
+      try { this.publish({ snapshot: await this.controller.read(), freshness: 'fresh' }); }
+      catch { this.publish({ freshness: 'stale' }); }
+      finally { this.operating = false; }
+    })();
+    try { await this.polling; } finally { this.polling = undefined; }
   }
   handle(client: string, request: CompanionRequest): Promise<CompanionReply> {
     if (!validCompanionRequest(request)) return Promise.resolve(this.reply(0, 'rejected', 'invalid'));
@@ -123,6 +129,9 @@ export class CompanionCoordinator {
     return result.then(clone);
   }
   private async perform(client: string, { sequence, operation: op }: CompanionRequest): Promise<CompanionReply> {
+    // Refresh and opening a menu only read Yamaha state, so they may wait for
+    // a background read. Writes still reject concurrent work and never queue.
+    if ((op.type === 'reconcile' || op.type === 'browse') && this.polling) await this.polling;
     if (this.operating) return this.reply(sequence, 'rejected', 'busy');
     if (this.lease && this.now() >= this.lease.expires) this.release();
     if (op.type === 'release') {
@@ -150,7 +159,7 @@ export class CompanionCoordinator {
       } else {
         if (op.type === 'browse') {
           this.lease = { owner: client, token: String(++this.leaseSequence), expires: this.now() + 45000 };
-          this.publish({ menuOwner: client });
+          this.publish({ menuOwner: client, menu: undefined });
           page = await this.controller.browse(op.input, op.index);
         } else {
           const result = await this.controller.browseAction(op.action);
@@ -159,6 +168,7 @@ export class CompanionCoordinator {
           if (op.action.type === 'play') outcome = 'accepted';
         }
         this.lease!.expires = this.now() + 45000;
+        this.publish({ menu: page });
       }
     } catch (error) {
       const browseCode = error instanceof BrowseError ? error.code : undefined;
@@ -192,17 +202,18 @@ export class CompanionController implements Controller {
   private operating = false;
   private uncertain = false;
   private active = true;
+  private observationFailed = false;
   private observing?: Promise<CompanionState>;
-  private readonly observers = new Set<(state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean }) => void>();
+  private readonly observers = new Set<(state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean; browse?: BrowsePage }) => void>();
   setActive(active: boolean) { this.active = active; }
   private emit(stale = this.current?.freshness !== 'fresh') {
-    for (const listener of this.observers) listener({ snapshot: this.current?.snapshot, stale, needsRefresh: this.uncertain || !!this.current?.needsReconcile });
+    for (const listener of this.observers) listener({ snapshot: this.current?.snapshot, stale, needsRefresh: this.uncertain || !!this.current?.needsReconcile, browse: this.current?.menu });
   }
-  watch(listener: (state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean }) => void) {
+  watch(listener: (state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean; browse?: BrowsePage }) => void) {
     this.observers.add(listener); this.emit();
     const timer = setInterval(() => {
       if (!this.active || this.operating) return;
-      void this.observe().catch(() => this.emit(true));
+      void this.observe().catch(() => { this.observationFailed = true; this.emit(true); });
     }, 500);
     return () => { clearInterval(timer); this.observers.delete(listener); };
   }
@@ -221,10 +232,13 @@ export class CompanionController implements Controller {
   }
   private accept(state: CompanionState) {
     if (state.version !== 1) throw new CompanionError('invalid');
+    const recovered = this.observationFailed; this.observationFailed = false;
     if (!this.current || state.generation !== this.current.generation || state.revision > this.current.revision) {
-      if (this.current && state.generation !== this.current.generation) { this.sequence = 0; this.lease = ''; this.uncertain = true; }
+      // The new coordinator owns the shared Refresh gate. Keep the local latch
+      // only for this client's unknown write result, which a peer cannot clear.
+      if (this.current && state.generation !== this.current.generation) { this.sequence = 0; this.lease = ''; }
       this.current = state; this.notify(state); this.emit();
-    }
+    } else if (recovered) this.emit();
   }
   private async operation(op: CompanionOperation): Promise<CompanionReply> {
     if (this.operating) throw new CompanionError('busy');

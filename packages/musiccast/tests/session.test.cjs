@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { BrowseError, DeviceSession } = require('../dist');
+const { BrowseError, CompanionError, DeviceSession } = require('../dist');
 const host = '192.168.1.50';
 const snapshot = { model: 'Example', status: { power: 'standby', input: 'cd' }, features: { controls: ['power'], sources: [], connectivity: [] }, trackUnavailable: false };
 function deferred() { return Promise.withResolvers(); }
@@ -339,4 +339,41 @@ test('a menu request during a silent read is reserved, then runs once after it',
   gate.resolve(snapshot); await silent; await browse;
   assert.deepEqual(order, ['read', 'read', 'browse']);
   assert.deepEqual(session.state.browse, page); assert.equal(session.state.busy, false);
+});
+
+
+for (const explicit of [true, false]) test(`a ${explicit ? 'failed explicit' : 'pending silent'} read preserves shared refresh ownership`, async () => {
+  let observe, reads = 0;
+  const gate = deferred();
+  const session = new DeviceSession(() => ({
+    read: async () => ++reads === 1 ? snapshot : gate.promise,
+    watch: listener => { observe = listener; return () => {}; },
+  }));
+  await session.connect(host);
+  if (explicit) observe({ stale: true, needsRefresh: true });
+  const reading = session.refresh(explicit);
+  if (!explicit) observe({ stale: true, needsRefresh: true });
+  if (explicit) gate.reject(new Error('read unavailable'));
+  else gate.resolve(snapshot);
+  await reading;
+  assert.equal(session.state.needsRefresh, true);
+  assert.equal(session.state.error, 'refreshRequired');
+  observe({ stale: false, needsRefresh: false, snapshot });
+  assert.equal(session.state.needsRefresh, false);
+  assert.equal(session.state.error, undefined);
+  assert.equal(session.state.phase, 'connected');
+});
+
+test('a coordinator rejection before dispatch asks for Refresh without claiming a lost command', async () => {
+  for (const code of ['reconcile', 'generation', 'offline']) {
+    let attempts = 0, failRead = false;
+    const session = new DeviceSession(() => ({ read: async () => { if (failRead) throw new Error('offline'); return snapshot; }, execute: async () => { attempts++; throw new CompanionError(code); } }));
+    await session.connect(host); await session.execute({ type: 'volume', value: 'up' });
+    assert.equal(session.state.error, 'refreshRequired');
+    assert.equal(session.state.needsRefresh, true);
+    await session.execute({ type: 'volume', value: 'up' });
+    assert.equal(attempts, 1);
+    failRead = true; await session.refresh();
+    assert.equal(session.state.error, 'refreshRequired');
+  }
 });

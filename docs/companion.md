@@ -19,9 +19,37 @@ the audio through its existing accounts.
 4. Compare the six digits on both screens. Approve on the phone, then confirm on
    the TV only if they match. Choose Refresh before sending device commands.
 
+### Mobile QR support (build 12)
+
+The mobile connection screen now opens phone + TV setup as its primary action.
+On an updated TV that displays a pairing QR, choose **Scan TV QR code** on iPhone.
+The camera runs only while that screen is open. Allow camera access when asked.
+If the code does not include Yamaha's address, enter its private IPv4 address
+before finishing. Keep both apps open until the TV confirms saving.
+
+This change updates the mobile app and its shared protocol only. The TV app in
+this repository still uses the address-and-digits steps above; choose **Connect
+using an address** on iPhone for that version. QR display and reliable TV storage
+must be added to the TV app separately. Mobile support does not fix a failing
+Tizen Key Manager write.
+
+The QR invitation contains a random ID and 256-bit secret, expires after five
+minutes, and is accepted only after a deliberate scan. The phone publishes its
+invitation ID in discovery, never its secret. An updated TV finds that ID,
+proves possession of the QR secret through encrypted `/peer/qr/prepare`, and
+receives the receiver address. HKDF derives a pairing key bound to the phone's
+boot identifier. The TV must save and read back its candidate record before
+calling `/peer/pair/confirm`; the iPhone saves to device-only SecureStore and
+reads it back before acknowledging. A failed phone save appears on iPhone.
+Only the pairing acknowledgement can be requested again after a lost reply;
+this never retries a Yamaha command. Successful saved pairs use the existing
+session protocol after restarting without scanning again.
+
+Never log, capture or commit QR contents, pairing records or encrypted packets.
+
 The TV searches its private `/24`, with 12 read-only probes at a time and a
 1.2-second timeout per address. Discovery reveals only a service/version, address
-and random boot identifier. It does not pair or issue Yamaha commands. After
+and random boot identifier, plus an invitation ID while QR setup is active. It does not pair or issue Yamaha commands. After
 pairing the TV tries the saved phone address and searches every 30 seconds while
 active, so a changed phone IP can be found without pairing again. The phone sees
 its TV through the authenticated connection; it does not scan for a TV listener.
@@ -44,7 +72,10 @@ Only one iPhone and one TV per pairing are supported.
 | Neither open | Yamaha continues playback; no coordinator runs. |
 
 A phone authority lease lasts 12 seconds and is renewed by authenticated TV
-traffic. While a TV operation is pending, the TV sends observation-only
+traffic. Cached status observations time out after 3 seconds and get one retry
+on the same authenticated session. A single missed status reply does not retire
+the connection. Initial handoff reads retain their longer timeout. While a TV
+operation is pending, the TV sends observation-only
 heartbeats every 4 seconds, so a slow menu read does not expire the lease. TV
 operations wait up to 110 seconds for the phone's reply (a menu action can chain
 two 35-second menu reads). Every Yamaha mutation is checked again immediately
@@ -83,11 +114,24 @@ state. Navigation, focus and themes remain local. The TV retains its themes and
 remote control; the phone retains EN/UK, source browsing, FM/DAB and foreground
 physical-volume handling. Capabilities and limits come from Yamaha.
 
-One device operation runs at a time, with no command queue. Busy presses are
-dropped. Slow source menus leave cached Now Playing and local navigation usable.
+One device operation runs at a time, with no command queue. Busy command presses
+are dropped. Opening a menu waits for a background status read, then checks
+freshness and menu ownership before reading it. Slow source menus leave cached
+Now Playing and local navigation usable.
 Menu ownership lasts 45 seconds; **Take over menu** invalidates the other screen's
 selection. External Yamaha apps can still change the receiver; its API cannot
 make the final menu-check/selection pair atomic.
+
+While both apps browse the same source in shared mode, completed menu pages are
+shared with the other screen. Following a page does not grant its menu lease or
+send receiver commands. After the other app takes over, choose **Take over menu**
+to navigate here again. The TV offers this beside the menu as well as in Connection
+settings. Now Playing, Sources, themes and focus remain local.
+
+Volume and mute finish after Yamaha confirms the actual sound state. Track,
+tuner and Bluetooth metadata refresh with normal background reads, rather than
+blocking each sound adjustment. Ordinary activity keeps the connected badge
+steady; genuine connection failures and uncertain commands still show errors.
 
 Every write is sent once. An uncertain result blocks subsequent writes until
 explicit Refresh succeeds. Passive updates, resume and reconnect cannot clear

@@ -1,4 +1,4 @@
-import { FrameCompanion, findFrameCompanions, pairFrame, savedCompanion, companionFeatures, companionStatus, companionInfo, companionTuner } from './companion.js';
+import { FrameCompanion, findFrameCompanions, pairFrame, savedCompanion, companionFeatures, companionStatus, companionInfo, companionTuner, companionMenu } from './companion.js';
 import { MusicCast, transport, entries, soundControls, sources, sourceName, deviceCapabilities, privateIPv4 } from './protocol.js';
 import { demoTransport } from './demo.js';
 import { LyricsLoader, artworkUrl, trackKey } from './metadata.js';
@@ -56,7 +56,11 @@ let playerOrigin = 'content', lastArrow = 0, lastArrowTime = 0, heldArrow;
 const lyricsLoader = new LyricsLoader();
 const icons = { Flow: '≈', Charts: '↗', Recommendations: '✧', Mixes: '♫', Genres: '◈', 'My library': '▤', Search: '⌕' };
 
+const companionRecoveryMessage = 'Connection changed or an action needs checking. Choose Refresh to read the current Yamaha state.';
+const companionReconnectingMessage = 'Connection interrupted. Reconnecting to iPhone and Yamaha… Keep Mosaicast open on your iPhone.';
+
 function message(text, error = false) {
+  if (!text) { $('continue-menu').hidden = true; delete $('continue-menu').dataset.input; }
   $('message').textContent = text;
   $('message').classList.toggle('error', error);
 }
@@ -69,6 +73,11 @@ async function action(work) {
   try { await work(); message(''); }
   catch (error) {
     message(error.message, true);
+    if (['owned', 'companionOwned', 'browseChanged'].includes(error.code) && error.menuInput) {
+      $('continue-menu').dataset.input = error.menuInput;
+      $('continue-menu').textContent = `Take over ${sourceName(error.menuInput)} menu`;
+      $('continue-menu').hidden = false;
+    }
     if (!$('overlay').hidden) $('dialog-error').textContent = error.message;
   } finally { busy = false; $('menu').setAttribute('aria-busy', 'false'); }
 }
@@ -584,15 +593,21 @@ async function connect(host, demo = false, pairing) {
       features = companionFeatures(observed.snapshot);
       renderPlayer(companionInfo(observed.snapshot), companionStatus(observed.snapshot)); renderSound(companionStatus(observed.snapshot));
     }
-    const state = candidate.controller.state;
+    // Follow the shared page while browsing, without changing local navigation.
+    const menu = observed.browse;
+    if (!busy && !sourceView && !trackView && menu?.input === browsingInput && (menu.token !== list?.token || JSON.stringify(menu) !== JSON.stringify(candidate.page))) {
+      candidate.page = menu;
+      menuParents.length = 0;
+      renderMenu(companionMenu(menu), null);
+    }
     const blocked = observed.stale || observed.needsRefresh;
-    $('connection-badge').textContent = blocked ? 'REFRESH CONNECTION' : state?.activity ? 'YAMAHA BUSY' : 'COMPANION CONNECTED';
+    $('connection-badge').textContent = observed.needsRefresh ? 'REFRESH CONNECTION' : observed.stale ? 'RECONNECTING' : 'COMPANION CONNECTED';
     if (blocked) {
       for (const button of $('tuner-controls').querySelectorAll('button')) button.disabled = true;
-      tunerSignature = ''; // Re-enable only from a fresh observation after explicit recovery.
+      tunerSignature = ''; // Re-enable only after fresh state and any required Refresh.
       for (const id of ['power-on', 'power-off', 'previous', 'toggle-play', 'next', 'volume-up', 'volume-down', 'mute']) $(id).disabled = true;
-      message('Coordinator changed or an action needs checking. After a phone disconnect, wait one minute, then choose Refresh.', true);
-    }
+      message(observed.needsRefresh ? companionRecoveryMessage : companionReconnectingMessage, observed.needsRefresh);
+    } else if ([companionRecoveryMessage, companionReconnectingMessage].includes($('message').textContent)) message('');
   });
   closeDialog();
   (menu ? $('menu') : $('source-list')).querySelector('button:not(:disabled)')?.focus();
@@ -601,6 +616,15 @@ async function connect(host, demo = false, pairing) {
 
 $('find-companions').onclick = () => { if (companionSearch) stopCompanionSearch(); else void searchCompanions(); };
 $('pair-companion').onclick = () => openDialog('companion');
+$('continue-menu').onclick = () => {
+  const input = $('continue-menu').dataset.input;
+  if (!input || !client?.companion) return;
+  return action(async () => {
+    const page = await client.list(0, input, true);
+    browsingInput = input; prepared = false; menuParents.length = 0;
+    renderMenu(page, 0);
+  });
+};
 $('takeover-menu').onclick = () => action(async () => {
   if (!browsingInput) throw new Error('Choose a music source first.');
   const page = await client.list(0, browsingInput, true);

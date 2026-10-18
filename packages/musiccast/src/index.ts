@@ -11,7 +11,9 @@ export type { BrowseAction, BrowseItem, BrowsePage, BrowseResult } from './types
 export type { TunerBand, TunerFeatures, TunerPreset, TunerState } from './types';
 export { CompanionCoordinator, CompanionController, CompanionError, companionVersion, validCompanionRequest, validCommand } from './companion';
 export type { CompanionState, CompanionRequest, CompanionReply, CompanionOperation, CompanionExchange, CompanionCode } from './companion';
-export { PhonePeerService, beginPeerPairing, connectPeer, validPeer, peerURL } from './peer';
+export { PhonePeerService, createPeerInvitation, readPeerInvitation, beginQRPairing, beginPeerPairing, connectPeer, validPeer, peerURL } from './peer';
 export { discoverPeers } from './discovery';
 export type { PeerRecord, PeerRandom } from './peer-crypto';
 export { createTVPeerController, peerDeviceFetch } from './peer-controller';
+
+export type { PeerInvitation } from './peer';

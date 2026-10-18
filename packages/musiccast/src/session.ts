@@ -11,7 +11,7 @@ export interface DeviceState {
   pendingCommand?: Command;
   refreshing?: boolean;
   needsRefresh: boolean;
-  error?: 'connectError' | 'bridgeError' | 'readError' | 'uncertainError' | 'companionBusy' | 'commandRejected';
+  error?: 'connectError' | 'bridgeError' | 'readError' | 'uncertainError' | 'refreshRequired' | 'companionBusy' | 'commandRejected';
   outcome?: 'confirmed' | 'accepted' | 'bluetoothSearchStarted';
   browse?: BrowsePage;
   browseError?: BrowseErrorCode;
@@ -63,8 +63,10 @@ export class DeviceSession {
       this.stopWatching = controller.watch?.(observed => {
         if (generation !== this.generation) return;
         this.update({ ...(observed.snapshot ? { snapshot: observed.snapshot } : {}),
-          phase: observed.stale ? 'stale' : 'connected', needsRefresh: observed.needsRefresh || this.state.needsRefresh,
-          ...(observed.needsRefresh ? { error: 'uncertainError' } : {}) });
+          ...('browse' in observed ? { browse: observed.browse } : {}),
+          phase: observed.stale ? 'stale' : 'connected', needsRefresh: observed.needsRefresh || (this.state.needsRefresh && this.state.error === 'uncertainError'),
+          ...(observed.needsRefresh ? { error: this.state.error === 'uncertainError' ? 'uncertainError' : 'refreshRequired' }
+            : this.state.error === 'refreshRequired' ? { error: undefined } : {}) });
       });
       return true;
     } catch (error) {
@@ -100,11 +102,11 @@ export class DeviceSession {
         await previous;
         if (generation !== this.generation) return;
         const snapshot = await (explicit && controller.reconcile ? controller.reconcile() : controller.read());
-        if (generation === this.generation) this.update({ snapshot, phase: 'connected', needsRefresh: !explicit && this.state.needsRefresh, error: !explicit && this.state.needsRefresh ? 'uncertainError' : undefined,
+        if (generation === this.generation) this.update({ snapshot, phase: 'connected', needsRefresh: !explicit && this.state.needsRefresh, error: !explicit && this.state.needsRefresh ? this.state.error : undefined,
           ...(this.state.needsRefresh ? { browse: undefined, browseError: undefined, browseAccepted: false } : {}) });
       } catch (error) {
         failed = true;
-        if (generation === this.generation) this.update({ phase: 'stale', error: this.state.needsRefresh ? 'uncertainError' : error instanceof Error && error.name === 'BridgeUnavailableError' ? 'bridgeError' : 'readError' });
+        if (generation === this.generation) this.update({ phase: 'stale', error: this.state.needsRefresh ? this.state.error : error instanceof Error && error.name === 'BridgeUnavailableError' ? 'bridgeError' : 'readError' });
       } finally {
         if (generation === this.generation) {
           this.schedulePoll(failed);
@@ -141,6 +143,9 @@ export class DeviceSession {
       if (generation === this.generation) {
         if (error instanceof CommandRejectedError || (error instanceof CompanionError && ['busy', 'invalid', 'sequence'].includes(error.code))) {
           this.update({ error: error instanceof CompanionError && error.code === 'busy' ? 'companionBusy' : 'commandRejected' });
+        } else if (error instanceof CompanionError && ['reconcile', 'generation', 'offline'].includes(error.code)) {
+          // These replies reject the operation before any Yamaha write.
+          this.update({ phase: 'stale', needsRefresh: true, error: 'refreshRequired' });
         } else this.update({ phase: 'stale', needsRefresh: true, error: 'uncertainError' });
       }
     } finally {
@@ -161,7 +166,10 @@ export class DeviceSession {
       const browse = await controller.browse(input, index, takeover);
       if (generation === this.generation) this.update({ browse });
     } catch (error) {
-      if (generation === this.generation) this.update({ browse: undefined, browseError: error instanceof BrowseError ? error.code : 'browseReadError' });
+      if (generation === this.generation) this.update({
+        browse: error instanceof BrowseError && error.code === 'companionOwned' && this.state.browse?.input === input ? this.state.browse : undefined,
+        browseError: error instanceof BrowseError ? error.code : 'browseReadError',
+      });
     } finally { if (generation === this.generation) this.update({ busy: false }); }
   }
 

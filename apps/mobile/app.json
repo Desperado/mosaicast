@@ -16,7 +16,7 @@
         }
       },
       "bundleIdentifier": "io.github.desperado.mosaicast",
-      "buildNumber": "10"
+      "buildNumber": "22"
     },
     "android": {
       "permissions": [
@@ -33,7 +33,15 @@
       "expo-router",
       "expo-localization",
       "./plugins/local-network.cjs",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Mosaicast to scan the pairing QR code on your TV.",
+          "recordAudioAndroid": false,
+          "microphonePermission": false
+        }
+      ]
     ],
     "extra": {
       "router": {},

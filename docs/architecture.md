@@ -103,9 +103,12 @@ no device command. Connected headphones stay visible, even if previously hidden.
 Restore clears the filter for the current receiver only. Pairing deletion is not
 exposed by the documented Yamaha API and is not presented as an available control.
 
-On-demand native discovery uses Expo Network to obtain the phone's local IPv4
-on Wi-Fi or Ethernet. The pure adapter scans only its `/24` range, skipping the
-phone, with 12 workers and 1.2-second abortable probes to the fixed
+On iOS, discovery and the peer listener use the same native private IPv4 lookup
+on the active en0 Wi-Fi interface. VPN default routes and other en* interfaces
+cannot override it. Android uses Expo Network's WifiManager address lookup.
+Address failures expose only fixed diagnostic codes, never interface dumps or
+raw errors. Default-route classification does not gate LAN access. The pure adapter
+scans only its `/24` range, skipping the phone, with 12 workers and 1.2-second abortable probes to the fixed
 `system/getDeviceInfo` endpoint. Non-success, malformed, redirected or oversized
 responses are ignored; only successful Yamaha-shaped responses with a model name
 appear. Results are not persisted or automatically connected. Screen blur,
@@ -236,7 +239,10 @@ all Yamaha mutation routes at dispatch, including writes after awaited preflight
 Semantic DTOs carry generation, revision, sequence, freshness and menu lease;
 never arbitrary routes or proxy targets. One operation runs with no queue.
 Eight bounded client histories retain 64 outcomes each; duplicate sequences do not
-repeat writes. Generation changes and uncertain results require explicit refresh.
+repeat writes. After a generation change, explicit Refresh on either screen
+clears the shared recovery gate. A client with its own unknown command result
+still requires its own Refresh. Temporary observation failures clear on the next
+fresh observation, even when its cached revision has not changed.
 Coordinator invalidation during a slow Refresh stays latched after it completes.
 Menu ownership lasts 45 seconds; takeover invalidates old selections. External
 Yamaha controllers remain outside this lease and the final check/write gap remains.

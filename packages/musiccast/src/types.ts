@@ -84,7 +84,7 @@ export interface Controller {
   setActive?(active: boolean): void;
   close?(): void;
   reconcile?(): Promise<Snapshot>;
-  watch?(listener: (state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean }) => void): () => void;
+  watch?(listener: (state: { snapshot?: Snapshot; stale: boolean; needsRefresh: boolean; browse?: BrowsePage }) => void): () => void;
   execute(command: Command): Promise<Snapshot>;
   browse(input: string, index?: number, takeover?: boolean): Promise<BrowsePage>;
   browseAction(action: BrowseAction): Promise<BrowseResult>;

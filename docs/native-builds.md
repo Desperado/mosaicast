@@ -4,9 +4,9 @@ The first target is a standalone controller installed on a phone. These profiles
 bundle the app, so they do not need Metro, Expo Go, or the browser bridge at
 runtime. The phone and Yamaha must be on the same reachable home network.
 
-Current direct-install iPhone preview: [0.1.0 (6)](https://expo.dev/accounts/quality-max/projects/mosaicast/builds/762b096a-a10b-4544-ad90-4ad8f6dc51be),
+Current direct-install iPhone preview: [Mosaicast Dev 0.1.0 (12)](https://expo.dev/accounts/quality-max/projects/mosaicast/builds/d9daffcf-f2c4-48d8-8ab5-b397b87db96d),
 completed on 17 October 2026. Open that page on the registered iPhone to install.
-Compilation passed; the physical-device acceptance checks below remain to be run.
+The build completed successfully from commit `bb7372b`. It includes camera-based TV QR pairing and verified secure-store persistence. The physical-device acceptance checks below remain to be run.
 
 Run `npm ci`, `npm run check`, and `npm run bundle:check` from the repository
 root. Bundle checks cover iOS, Android, and web JavaScript and assets. They do
@@ -45,7 +45,7 @@ its own provisioning profile; EAS can reuse the team's distribution certificate.
 `app.config.js` selects `APP_VARIANT=development` by default. The `production`
 EAS profile explicitly sets `APP_VARIANT=production`, preserving the official
 `io.github.desperado.mosaicast` identifiers and `mosaicast` URL scheme.
-Version `0.1.0`, iOS build number `10`, and Android version code `5` are local;
+Version `0.1.0`, iOS build number `16`, and Android version code `5` are local;
 increment build numbers before uploading another binary to a store.
 
 When switching variants after a local native build, regenerate the ignored
@@ -84,6 +84,63 @@ This profile does not upload to TestFlight or publish to the App Store.
 For TestFlight, use the separate store-signing `production` profile and follow
 the [TestFlight preparation notes](testflight.md). A direct-install preview
 cannot be reused as a TestFlight upload.
+
+## Local iPhone builds
+
+Mosaicast Dev `0.1.0 (16)` was built locally on 18 October 2026 from the
+code in `a88436f`. Native compilation, bundle identity/build-number checks and
+deep strict code-signature verification passed. It clears live pairing status
+when the phone listener stops, explains a missing phone address, allows scanning
+a new TV QR from the connected screen, and distinguishes a local startup failure
+from a missing native module. EN/UK help allows an Ethernet TV with a Wi-Fi phone.
+Build 16 was installed in place on the physical iPhone; devicectl verified the
+installed bundle version as `16`. Automatic launch was rejected because the
+iPhone was locked. Open Mosaicast Dev manually after unlocking; simultaneous
+phone/TV acceptance remains to be confirmed.
+
+Mosaicast Dev `0.1.0 (15)` was built locally on 18 October 2026 from commit
+`90cf676`. Native compilation, bundle identity/build-number checks and code-
+signature verification passed. It fixes post-pairing refresh contention and
+distinguishes a shared refresh requirement from a genuinely uncertain command.
+Build 15 was installed and launched on the physical iPhone; the installed
+bundle version was verified as `15`. The corresponding TV refresh-fix package
+from Frame Music commit `37c9ad3` was installed in place and launched on the
+Samsung GQ55LS03BGUXZG. Simultaneous post-fix phone/TV acceptance remains to
+be run.
+
+Mosaicast Dev `0.1.0 (14)` was built locally on 18 October 2026 from commit
+`c821751`. Native compilation and code-signature verification passed. It includes
+scanner pinch/button zoom, QR launch routing, and the scan → connecting →
+connected → Listen flow. The corresponding signed Frame Music TV package was
+installed and launched on a Samsung GQ55LS03BGUXZG. Build 14 was installed and
+launched on the physical iPhone. User photos confirm that pairing was saved on
+both devices, followed by a failed first refresh. Post-fix simultaneous pairing
+acceptance checks remain to be run.
+
+For this development preview, scan inside **Mosaicast Dev → Connect phone + TV**.
+The normal iPhone Camera opens the app registered for `mosaicast`; the development
+preview registers `mosaicast-dev`, so camera-link validation needs an updated
+production-identity binary.
+
+Mosaicast Dev `0.1.0 (13)` was built locally on 17 October 2026 from commit
+`91c79d1`. Native compilation and code-signature verification passed. This IPA
+contains the same QR pairing and persistence changes as cloud build 12. Physical
+iPhone/TV acceptance checks remain to be run.
+
+A local EAS build needs full Xcode, CocoaPods, and Fastlane. It uses the same
+`preview` profile and existing EAS-managed signing credentials, without a cloud
+build slot:
+
+```sh
+# Run from apps/mobile.
+npx eas-cli@latest build --platform ios --profile preview --local --output /tmp/Mosaicast-Dev.ipa
+```
+
+If Xcode is outside the selected developer directory, set `DEVELOPER_DIR` to
+that app's `Contents/Developer` directory for this command. This does not change
+the Mac's system-wide Xcode selection. The signed IPA can be installed on a
+registered iPhone using a Mac; local builds do not create an Expo install page.
+Do not retain or commit temporary signing credentials or raw build job output.
 
 ## iOS Simulator
 
@@ -138,6 +195,9 @@ cannot be installed on an iPhone. LAN access still needs real-device testing.
   Adjust headphone volume on the headphones and confirm the app labels its
   controls as speaker volume. Disconnect an old entry, remove it from the app,
   relaunch, then restore it. Removal must not send an unpair command to Yamaha.
+- With the updated Frame Music TV app, scan its QR from Connect phone + TV.
+  Check denied camera permission, expired codes, failed secure-store writes,
+  explicit retry, and restarting both apps without another scan.
 - Background and resume the app; check that state refreshes and no command is
   replayed. Relaunch and verify saved device mode, language, and appearance.
 - Switch to demo and verify it sends no requests to the Yamaha.
@@ -164,5 +224,8 @@ the unsupported-native-build message for peer setup.
 
 Production JavaScript export is not a native compilation check. Full Xcode, a
 signed iPhone build, a signed Tizen package and simultaneous hardware testing are
-required before release. No signing, build submission or installation was performed
-for this integration. See [peer validation](companion-validation.md).
+required before release. Mosaicast Dev build 15 completed locally, and build 12
+is available on EAS. Build 15 and the corresponding signed TV refresh-fix package
+were installed and launched on the physical iPhone and Samsung GQ55LS03BGUXZG.
+Simultaneous post-fix iPhone/TV validation remains to be run. See
+[peer validation](companion-validation.md).

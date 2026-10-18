@@ -138,3 +138,183 @@ test('an observation discovering a new generation blocks an already requested wr
   await assert.rejects(write, error => error.code === 'reconcile');
   assert.equal(f.writes, 0); await client.reconcile(); await client.execute(volume); assert.equal(f.writes, 1);
 });
+
+
+test('first TV Refresh waits for an in-flight phone poll without queueing Yamaha writes', async () => {
+  const f = fixture(), tv = f.client('tv');
+  const gate = Promise.withResolvers(), read = f.adapter.read;
+  let active = 0, overlap = false;
+  f.adapter.read = async () => {
+    if (++active > 1) overlap = true;
+    await gate.promise;
+    try { return await read(); } finally { active--; }
+  };
+  const poll = f.coordinator.poll();
+  const refresh = tv.reconcile();
+  assert.equal((await f.coordinator.handle('phone', request(1, { type: 'command', command: volume }))).code, 'busy');
+  gate.resolve(); await poll;
+  assert.equal((await refresh).status.volume, 10);
+  assert.equal(tv.state.needsReconcile, false);
+  assert.equal(overlap, false); assert.equal(f.writes, 0);
+});
+
+test('opening Deezer waits for a background status read while writes still reject as busy', async () => {
+  const f = fixture(), phone = f.client('phone'), tv = f.client('tv');
+  await phone.reconcile(); await tv.read();
+  const gate = Promise.withResolvers(), read = f.adapter.read, browse = f.adapter.browse;
+  let reading = false, overlap = false, menus = 0;
+  f.adapter.read = async () => {
+    reading = true; await gate.promise;
+    try { return await read(); } finally { reading = false; }
+  };
+  f.adapter.browse = async (...args) => {
+    overlap ||= reading; menus++; return browse(...args);
+  };
+  const poll = f.coordinator.poll();
+  const menu = phone.browse('deezer');
+  // Attach a handler before yielding: the old implementation rejects immediately.
+  const result = Promise.allSettled([menu]);
+  await assert.rejects(tv.execute(volume), error => error.code === 'busy');
+  assert.equal(menus, 0);
+  gate.resolve(); await poll;
+  const [opened] = await result;
+  assert.equal(opened.status, 'fulfilled');
+  assert.equal(opened.value.input, 'deezer');
+  assert.equal(overlap, false); assert.equal(menus, 1); assert.equal(f.writes, 0);
+});
+
+test('a menu waiting for a poll still respects ownership and failed status reads', async () => {
+  const f = fixture(), phone = f.client('phone'), tv = f.client('tv');
+  await phone.reconcile(); await tv.read(); await tv.browse('deezer');
+  const read = f.adapter.read;
+  let gate = Promise.withResolvers();
+  f.adapter.read = async () => { await gate.promise; return read(); };
+  let poll = f.coordinator.poll();
+  let menu = assert.rejects(phone.browse('deezer'), error => error.code === 'companionOwned');
+  gate.resolve(); await poll; await menu;
+  assert.equal(f.coordinator.state.menuOwner, 'tv');
+  gate = Promise.withResolvers(); f.failRead = true;
+  poll = f.coordinator.poll();
+  menu = assert.rejects(phone.browse('deezer', 0, true), error => error.code === 'reconcile');
+  gate.resolve(); await poll; await menu;
+  assert.equal(f.coordinator.state.menuOwner, 'tv');
+  assert.equal(f.menuWrites, 0); assert.equal(f.writes, 0);
+});
+
+test('shared pairing refresh clears on both apps and does not claim an unknown command result', async () => {
+  const f = fixture(), phone = f.client('phone'), tv = f.client('tv');
+  await f.coordinator.poll(); await phone.reconcile();
+  const session = new DeviceSession(() => phone); await session.connect(host);
+  try {
+    f.coordinator.invalidate(); await phone.observe();
+    assert.equal(session.state.needsRefresh, true);
+    assert.equal(session.state.error, 'refreshRequired');
+    await tv.reconcile(); await phone.observe();
+    assert.equal(session.state.needsRefresh, false);
+    assert.equal(session.state.error, undefined);
+    await session.execute(volume); assert.equal(f.writes, 1);
+  } finally { session.disconnect(); }
+});
+
+test('a remote Refresh cannot clear a phone command whose reply was lost', async () => {
+  const f = fixture(), tv = f.client('tv'); let lose = true;
+  const phone = new CompanionController(host, async req => {
+    const reply = await f.exchange('phone')(req);
+    if (req?.operation.type === 'command' && lose) { lose = false; throw new Error('lost reply'); }
+    return reply;
+  });
+  await f.coordinator.poll(); await phone.reconcile();
+  const session = new DeviceSession(() => phone); await session.connect(host);
+  try {
+    await session.execute(volume);
+    await tv.reconcile(); await phone.observe();
+    assert.equal(session.state.needsRefresh, true);
+    assert.equal(session.state.error, 'uncertainError');
+    await session.execute(volume); assert.equal(f.writes, 1);
+    await session.refresh(); await session.execute(volume); assert.equal(f.writes, 2);
+  } finally { session.disconnect(); }
+});
+
+test('a successful cached observation clears a watch transport error without a new revision', async t => {
+  const f = fixture(); let offline = false;
+  const tv = new CompanionController(host, request => {
+    if (offline) return Promise.reject(new Error('connection interrupted'));
+    return f.exchange('tv')(request);
+  });
+  await f.coordinator.poll(); await tv.reconcile();
+  const revision = tv.state.revision, observed = [];
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const stop = tv.watch(state => observed.push(state));
+  try {
+    offline = true; t.mock.timers.tick(500);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(observed.at(-1).stale, true);
+    assert.equal(observed.at(-1).needsRefresh, false);
+    offline = false; t.mock.timers.tick(500);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(tv.state.revision, revision);
+    assert.equal(observed.at(-1).stale, false);
+    assert.equal(observed.at(-1).needsRefresh, false);
+    assert.equal(f.writes, 0);
+  } finally { stop(); }
+});
+
+test('a phone Refresh after coordinator restart also unlocks an observing TV', async () => {
+  const f = fixture(), tv = f.client('tv');
+  await f.coordinator.poll(); await tv.reconcile();
+  f.restart(); await f.coordinator.poll(); await tv.observe();
+  await assert.rejects(tv.execute(volume), error => error.code === 'reconcile');
+  assert.equal(f.writes, 0);
+  await f.client('phone').reconcile(); await tv.observe();
+  const observed = []; const stop = tv.watch(state => observed.push(state));
+  try {
+    assert.equal(observed.at(-1).needsRefresh, false);
+    await tv.execute(volume); assert.equal(f.writes, 1);
+  } finally { stop(); }
+});
+
+test('a coordinator restart and phone Refresh cannot clear the TV own lost write reply', async () => {
+  const f = fixture();
+  const tv = new CompanionController(host, async request => {
+    const reply = await f.exchange('tv')(request);
+    if (request?.operation.type === 'command') throw new Error('lost reply');
+    return reply;
+  });
+  await f.coordinator.poll(); await tv.reconcile();
+  await assert.rejects(tv.execute(volume), error => error.code === 'uncertain');
+  f.restart(); await f.coordinator.poll(); await tv.observe();
+  await f.client('phone').reconcile(); await tv.observe();
+  await assert.rejects(tv.execute(volume), error => error.code === 'reconcile');
+  assert.equal(f.writes, 1);
+  await tv.reconcile();
+});
+
+test('shared menu pages follow navigation on the other screen without granting its write lease', async () => {
+  const f = fixture(), phone = f.client('phone'), tv = f.client('tv');
+  const session = new DeviceSession(() => phone);
+  try {
+    await phone.reconcile(); await session.connect(host);
+    await session.loadBrowse('deezer');
+    const first = session.state.browse;
+    const remote = await tv.browse('deezer', 0, true);
+    const navigated = (await tv.browseAction({ type: 'select', token: remote.token, index: 0 })).page;
+    await phone.observe();
+    assert.deepEqual(session.state.browse, navigated);
+    assert.notEqual(session.state.browse.token, first.token);
+    await session.loadBrowse('deezer');
+    assert.equal(session.state.browseError, 'companionOwned');
+    assert.deepEqual(session.state.browse, navigated, 'a rejected ownership request keeps the shared read-only page');
+    const menuWrites = f.menuWrites;
+    await session.browseAction({ type: 'play', token: navigated.token, index: 0 });
+    assert.equal(session.state.browseError, 'browseChanged');
+    assert.equal(f.menuWrites, menuWrites, 'observing a page cannot transfer menu ownership');
+    await session.loadBrowse('deezer', 0, true);
+    await session.browseAction({ type: 'play', token: session.state.browse.token, index: 0 });
+    assert.equal(f.menuWrites, menuWrites + 1);
+    await tv.observe();
+    assert.deepEqual(tv.state.menu, session.state.browse);
+    await phone.releaseBrowse();
+    assert.equal(session.state.browse, undefined);
+    await tv.observe(); assert.equal(tv.state.menu, undefined);
+  } finally { session.disconnect(); }
+});

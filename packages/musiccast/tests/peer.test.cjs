@@ -1,17 +1,17 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
-const { CompanionCoordinator, CompanionController, PhonePeerService, beginPeerPairing, connectPeer, createTVPeerController, peerDeviceFetch, MusicCastClient } = require('../dist');
+const { CompanionCoordinator, CompanionController, PhonePeerService, createPeerInvitation, readPeerInvitation, beginQRPairing, beginPeerPairing, connectPeer, createTVPeerController, peerDeviceFetch, MusicCastClient } = require('../dist');
 const { peerCommit, peerKeyPair, openPeer } = require('../dist/peer-crypto');
 const random = n => new Uint8Array(randomBytes(n));
 const receiver = '192.168.1.20', url = 'http://192.168.1.10:8095';
 const volume = { type: 'volume', value: 'up' };
 function fixture() {
-  let time = 1000, writes = 0, value = 10, failPersist = false, persisted, online = true, gate;
+  let time = 1000, writes = 0, value = 10, failPersist = false, persistCount = 0, persisted, online = true, gate;
   const snapshot = () => ({ model: 'Fixture', features: { controls: ['volume'], sources: [], connectivity: [], volumeRange: { min: 0, max: 30, step: 1 } }, status: { power: 'on', input: 'cd', volume: value }, trackUnavailable: false });
   const adapter = { read: async () => { if (gate) await gate.promise; return snapshot(); }, execute: async () => { writes++; value++; return snapshot(); } };
   const coordinator = new CompanionCoordinator(adapter, 'phone-generation');
-  const service = new PhonePeerService(receiver, url, coordinator, random, undefined, async record => { if (failPersist) throw new Error('storage'); persisted = record; }, () => time);
+  const service = new PhonePeerService(receiver, url, coordinator, random, undefined, async record => { persistCount++; if (failPersist) throw new Error('storage'); persisted = record; }, () => time);
   const packets = [];
   const fetcher = async (address, options = {}) => {
     if (!online) throw new Error('offline');
@@ -20,7 +20,7 @@ function fixture() {
     const result = await service.handle(options.method ?? 'GET', path, body);
     return { ok: true, text: async () => JSON.stringify(result) };
   };
-  return { service, coordinator, adapter, fetcher, packets, snapshot, get writes() { return writes; }, get persisted() { return persisted; }, set failPersist(v) { failPersist = v; }, set online(v) { online = v; }, set gate(v) { gate = v; }, advance(n) { time += n; }, now: () => time };
+  return { service, coordinator, adapter, fetcher, packets, snapshot, get writes() { return writes; }, get persisted() { return persisted; }, get persistCount() { return persistCount; }, set failPersist(v) { failPersist = v; }, set online(v) { online = v; }, set gate(v) { gate = v; }, advance(n) { time += n; }, now: () => time };
 }
 async function paired(f) { const pairing = await beginPeerPairing(url, random, f.fetcher); assert.ok(pairing.comparison === f.service.pairing.comparison); f.service.approve(); return pairing.confirm(); }
 
@@ -196,5 +196,168 @@ test('heartbeats keep phone authority during a slow TV menu operation without re
     // Heartbeats stop with the operation, so a vanished TV still loses authority.
     f.advance(4000); t.mock.timers.tick(4000); f.advance(8001);
     assert.equal(f.service.canControl, false);
+  } finally { t.mock.timers.reset(); tv.close(); }
+});
+
+
+test('QR pairing authenticates the scanned invitation, waits for durable phone save and restores after restart', async () => {
+  const f = fixture(), qr = createPeerInvitation(random, receiver, f.now());
+  assert.ok(readPeerInvitation(qr.text, f.now()).id === qr.invitation.id);
+  // TV and phone clocks may differ slightly even with network time enabled.
+  assert.ok(readPeerInvitation(qr.text, f.now() - 30000).id === qr.invitation.id);
+  f.service.acceptInvitation(qr.text);
+  const descriptor = await f.service.handle('GET', '/.well-known/mosaicast-peer');
+  assert.ok(descriptor.invitation === qr.invitation.id);
+  assert.equal(Object.hasOwn(descriptor, 'secret'), false);
+  assert.equal(JSON.stringify(descriptor).includes(qr.invitation.secret), false);
+  const wrong = { ...qr.invitation, secret: randomBytes(32).toString('hex') };
+  await assert.rejects(beginQRPairing(url, wrong, random, f.fetcher, f.now()));
+  assert.equal(f.service.pairing.qr, true, 'a forged prepare must leave the scanned invitation pending');
+  assert.throws(() => f.service.approve(), /expired/);
+  const pending = await beginQRPairing(url, qr.invitation, random, f.fetcher, f.now());
+  assert.equal(f.service.pairing.qr, true);
+  assert.equal(f.service.pairing.comparison, undefined);
+  f.failPersist = true;
+  await assert.rejects(pending.confirm(), /storage/);
+  assert.equal(f.service.paired, false);
+  f.failPersist = false;
+  const record = await pending.confirm();
+  assert.equal(f.service.paired, true);
+  assert.ok(record.key === f.persisted.key);
+  assert.equal(f.writes, 0);
+  f.service.close();
+  const restarted = new PhonePeerService(receiver, url, f.coordinator, random, f.persisted, async () => { throw new Error('must not re-pair'); }, f.now);
+  const fetcher = async (address, options = {}) => ({ ok: true, text: async () => JSON.stringify(await restarted.handle(options.method ?? 'GET', new URL(address).pathname, options.body ? JSON.parse(options.body) : undefined)) });
+  try {
+    const exchange = await connectPeer(record, random, fetcher);
+    await exchange();
+    assert.equal(restarted.canControl, true);
+    assert.equal(f.writes, 0);
+  } finally { restarted.close(); }
+});
+
+test('lost pairing acknowledgement can be requested again without a second save or receiver write', async () => {
+  const f = fixture(); let lose = true;
+  const fetcher = async (address, options) => {
+    const response = await f.fetcher(address, options);
+    if (new URL(address).pathname === '/peer/pair/confirm' && lose) { lose = false; throw new Error('lost acknowledgement'); }
+    return response;
+  };
+  const pending = await beginPeerPairing(url, random, fetcher);
+  f.service.approve();
+  await assert.rejects(pending.confirm(), /lost acknowledgement/);
+  assert.equal(f.service.paired, true);
+  assert.equal(f.persistCount, 1);
+  await pending.confirm();
+  assert.equal(f.persistCount, 1);
+  assert.equal(f.writes, 0);
+});
+
+test('QR validation rejects expired, malformed and public-receiver invitations; expired QR does not block manual pairing', async () => {
+  const f = fixture(), qr = createPeerInvitation(random, receiver, f.now());
+  const encode = value => 'mosaicast://pair/' + encodeURIComponent(JSON.stringify(value));
+  for (const value of [null, {}, { ...qr.invitation, id: null }, { ...qr.invitation, secret: 1 }, { ...qr.invitation, expires: f.now() }, { ...qr.invitation, expires: f.now() + 360001 }, { ...qr.invitation, receiver: '8.8.8.8' }]) assert.throws(() => readPeerInvitation(encode(value), f.now()));
+  for (const value of ['', 'https://example.com', 'mosaicast://pair/%', 'mosaicast://pair/' + 'a'.repeat(401)]) assert.throws(() => readPeerInvitation(value, f.now()));
+  f.service.acceptInvitation(qr.text);
+  await assert.rejects(beginPeerPairing(url, random, f.fetcher), /busy/);
+  f.advance(300001);
+  await assert.rejects(beginQRPairing(url, qr.invitation, random, f.fetcher, f.now()));
+  await beginPeerPairing(url, random, f.fetcher);
+  assert.equal(f.writes, 0);
+});
+
+
+test('explicit rescanning after a phone restart can replace a pair with the same invitation ID', async () => {
+  const f = fixture(), qr = createPeerInvitation(random, receiver, f.now());
+  f.service.acceptInvitation(qr.text);
+  const first = await beginQRPairing(url, qr.invitation, random, f.fetcher, f.now());
+  const old = await first.confirm(); f.service.close();
+  let saved;
+  const restarted = new PhonePeerService(receiver, url, f.coordinator, random, old, async record => { saved = record; }, f.now);
+  const fetcher = async (address, options = {}) => ({ ok: true, text: async () => JSON.stringify(await restarted.handle(options.method ?? 'GET', new URL(address).pathname, options.body ? JSON.parse(options.body) : undefined)) });
+  try {
+    restarted.acceptInvitation(qr.text);
+    const pending = await beginQRPairing(url, qr.invitation, random, fetcher, f.now());
+    const replacement = await pending.confirm();
+    assert.ok(replacement.id === old.id && replacement.key !== old.key);
+    assert.ok(saved.key === replacement.key);
+    assert.equal(restarted.pairing, undefined);
+    assert.equal(f.writes, 0);
+  } finally { restarted.close(); }
+});
+
+
+test('connection status requires a live TV handshake and keeps a new QR distinct from a saved pair', async () => {
+  const f = fixture(), record = await paired(f);
+  assert.equal(f.service.tvConnected, false);
+  const exchange = await connectPeer(record, random, f.fetcher);
+  assert.equal(f.service.tvConnected, false, 'a session alone has not yielded authority');
+  await exchange();
+  assert.equal(f.service.tvConnected, true);
+  const qr = createPeerInvitation(random, receiver, f.now());
+  f.service.acceptInvitation(qr.text);
+  assert.equal(f.service.paired, true);
+  assert.equal(f.service.pairing.qr, true);
+  assert.equal(f.service.pairing.expires, qr.invitation.expires);
+  f.service.cancelPairing();
+  assert.equal(f.service.pairing, undefined);
+  f.advance(12001);
+  assert.equal(f.service.tvConnected, false);
+  f.service.takeControl();
+  assert.equal(f.service.canControl, true);
+  assert.equal(f.service.tvConnected, false, 'phone takeover is not a connected TV');
+  f.service.acceptInvitation(qr.text); f.advance(300001);
+  assert.equal(f.service.pairing, undefined);
+  f.service.close();
+});
+
+
+test('a lost observation reply keeps the shared session and phone volume authority', async () => {
+  const f = fixture(), record = await paired(f); let loseObservation = false;
+  const fetcher = async (address, options) => {
+    const response = await f.fetcher(address, options);
+    if (loseObservation && new URL(address).pathname === '/peer/exchange') {
+      loseObservation = false; throw new Error('temporary Wi-Fi interruption');
+    }
+    return response;
+  };
+  const tv = createTVPeerController(record, random, () => [], fetcher, f.now);
+  const phone = new CompanionController(receiver, f.service.localExchange);
+  try {
+    await tv.read(); await tv.reconcile(); await phone.read();
+    const sessions = f.packets.filter(p => p.path === '/peer/session').length;
+    loseObservation = true;
+    await tv.observe();
+    await phone.execute(volume); await tv.observe();
+    assert.equal(tv.state.snapshot.status.volume, 11);
+    assert.equal(tv.state.needsReconcile, false);
+    assert.equal(f.service.tvConnected, true);
+    assert.equal(f.packets.filter(p => p.path === '/peer/session').length, sessions);
+    await tv.execute(volume); assert.equal(f.writes, 2);
+  } finally { tv.close(); }
+});
+
+test('ordinary observations time out and recover before the phone authority lease expires', async t => {
+  const f = fixture(), record = await paired(f); let stall = false;
+  const fetcher = async (address, options) => {
+    if (stall && new URL(address).pathname === '/peer/exchange') {
+      stall = false;
+      return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('timeout')), { once: true }));
+    }
+    return f.fetcher(address, options);
+  };
+  const tv = createTVPeerController(record, random, () => [], fetcher, f.now);
+  try {
+    await tv.read(); await tv.reconcile();
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    stall = true; let done = false;
+    const observation = tv.observe().then(() => { done = true; });
+    f.advance(3001); t.mock.timers.tick(3001);
+    for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(done, true, 'the cached observation must recover within the 12s authority lease');
+    await observation;
+    const phone = new CompanionController(receiver, f.service.localExchange);
+    await phone.execute(volume); assert.equal(f.writes, 1);
+    assert.equal(f.service.tvConnected, true);
   } finally { t.mock.timers.reset(); tv.close(); }
 });
