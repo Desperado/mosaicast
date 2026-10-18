@@ -56,6 +56,8 @@ let playerOrigin = 'content', lastArrow = 0, lastArrowTime = 0, heldArrow;
 const lyricsLoader = new LyricsLoader();
 const icons = { Flow: '≈', Charts: '↗', Recommendations: '✧', Mixes: '♫', Genres: '◈', 'My library': '▤', Search: '⌕' };
 
+const companionRecoveryMessage = 'Coordinator changed or an action needs checking. After a phone disconnect, wait one minute, then choose Refresh.';
+
 function message(text, error = false) {
   $('message').textContent = text;
   $('message').classList.toggle('error', error);
@@ -591,8 +593,8 @@ async function connect(host, demo = false, pairing) {
       for (const button of $('tuner-controls').querySelectorAll('button')) button.disabled = true;
       tunerSignature = ''; // Re-enable only from a fresh observation after explicit recovery.
       for (const id of ['power-on', 'power-off', 'previous', 'toggle-play', 'next', 'volume-up', 'volume-down', 'mute']) $(id).disabled = true;
-      message('Coordinator changed or an action needs checking. After a phone disconnect, wait one minute, then choose Refresh.', true);
-    }
+      message(companionRecoveryMessage, true);
+    } else if ($('message').textContent === companionRecoveryMessage) message('');
   });
   closeDialog();
   (menu ? $('menu') : $('source-list')).querySelector('button:not(:disabled)')?.focus();

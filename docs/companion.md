@@ -72,7 +72,10 @@ Only one iPhone and one TV per pairing are supported.
 | Neither open | Yamaha continues playback; no coordinator runs. |
 
 A phone authority lease lasts 12 seconds and is renewed by authenticated TV
-traffic. While a TV operation is pending, the TV sends observation-only
+traffic. Cached status observations time out after 3 seconds and get one retry
+on the same authenticated session. A single missed status reply does not retire
+the connection. Initial handoff reads retain their longer timeout. While a TV
+operation is pending, the TV sends observation-only
 heartbeats every 4 seconds, so a slow menu read does not expire the lease. TV
 operations wait up to 110 seconds for the phone's reply (a menu action can chain
 two 35-second menu reads). Every Yamaha mutation is checked again immediately

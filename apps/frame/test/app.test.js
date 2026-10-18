@@ -1131,3 +1131,29 @@ test('leaving shared setup cancels all discovery probes and ignores late results
   assert.equal(app.nodes.get('companion-results').children.length, 0);
   assert.equal(app.nodes.get('overlay').hidden, true);
 });
+
+
+test('a shared Refresh clears the TV recovery warning without hiding unrelated errors', async () => {
+  const snapshot = {model: 'Shared fixture', features: {controls: ['volume'], connectivity: [], sources: [{id: 'deezer', name: 'Deezer', networkPlayer: true}], volumeRange: {min: 0, max: 30, step: 1}}, status: {power: 'on', input: 'deezer', volume: 10}, trackUnavailable: false};
+  const coordinator = new shared.CompanionCoordinator({read: async () => snapshot}, 'ui-fixture');
+  const pairing = {url: 'http://192.168.1.10:8095', receiver: '192.168.1.20', id: randomBytes(16).toString('hex'), key: randomBytes(32).toString('hex')};
+  const phone = new shared.PhonePeerService(pairing.receiver, pairing.url, coordinator, n => new Uint8Array(randomBytes(n)), pairing, async () => {});
+  const app = await launch({keymanager: {getData: () => JSON.stringify(pairing)}}, {
+    storage: new Map([['mosaicast-mode', 'companion']]), companionFetch: async (url, options = {}) => {
+      const result = await phone.handle(options.method || 'GET', new URL(url).pathname, options.body ? JSON.parse(options.body) : undefined);
+      return {ok: true, text: async () => JSON.stringify(result)};
+    }
+  });
+  coordinator.invalidate(); await app.poll();
+  assert.match(app.nodes.get('message').textContent, /Coordinator changed/);
+  assert.equal(app.nodes.get('volume-up').disabled, true);
+  const handset = new shared.CompanionController(pairing.receiver, phone.localExchange);
+  await handset.reconcile(); await app.poll();
+  assert.equal(app.nodes.get('connection-badge').textContent, 'COMPANION CONNECTED');
+  assert.equal(app.nodes.get('message').textContent, '');
+  assert.equal(app.nodes.get('volume-up').disabled, false);
+  app.nodes.get('message').textContent = 'Deezer menu unavailable';
+  await coordinator.poll(); await app.poll();
+  assert.equal(app.nodes.get('message').textContent, 'Deezer menu unavailable');
+  assert.equal(app.calls.length, 0);
+});

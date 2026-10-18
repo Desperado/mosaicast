@@ -310,3 +310,54 @@ test('connection status requires a live TV handshake and keeps a new QR distinct
   assert.equal(f.service.pairing, undefined);
   f.service.close();
 });
+
+
+test('a lost observation reply keeps the shared session and phone volume authority', async () => {
+  const f = fixture(), record = await paired(f); let loseObservation = false;
+  const fetcher = async (address, options) => {
+    const response = await f.fetcher(address, options);
+    if (loseObservation && new URL(address).pathname === '/peer/exchange') {
+      loseObservation = false; throw new Error('temporary Wi-Fi interruption');
+    }
+    return response;
+  };
+  const tv = createTVPeerController(record, random, () => [], fetcher, f.now);
+  const phone = new CompanionController(receiver, f.service.localExchange);
+  try {
+    await tv.read(); await tv.reconcile(); await phone.read();
+    const sessions = f.packets.filter(p => p.path === '/peer/session').length;
+    loseObservation = true;
+    await tv.observe();
+    await phone.execute(volume); await tv.observe();
+    assert.equal(tv.state.snapshot.status.volume, 11);
+    assert.equal(tv.state.needsReconcile, false);
+    assert.equal(f.service.tvConnected, true);
+    assert.equal(f.packets.filter(p => p.path === '/peer/session').length, sessions);
+    await tv.execute(volume); assert.equal(f.writes, 2);
+  } finally { tv.close(); }
+});
+
+test('ordinary observations time out and recover before the phone authority lease expires', async t => {
+  const f = fixture(), record = await paired(f); let stall = false;
+  const fetcher = async (address, options) => {
+    if (stall && new URL(address).pathname === '/peer/exchange') {
+      stall = false;
+      return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('timeout')), { once: true }));
+    }
+    return f.fetcher(address, options);
+  };
+  const tv = createTVPeerController(record, random, () => [], fetcher, f.now);
+  try {
+    await tv.read(); await tv.reconcile();
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    stall = true; let done = false;
+    const observation = tv.observe().then(() => { done = true; });
+    f.advance(3001); t.mock.timers.tick(3001);
+    for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(done, true, 'the cached observation must recover within the 12s authority lease');
+    await observation;
+    const phone = new CompanionController(receiver, f.service.localExchange);
+    await phone.execute(volume); assert.equal(f.writes, 1);
+    assert.equal(f.service.tvConnected, true);
+  } finally { t.mock.timers.reset(); tv.close(); }
+});

@@ -147,7 +147,14 @@ export class MusicCastClient implements Controller {
       await write(route, params);
       for (let attempt = 0; attempt < 4; attempt++) {
         if (attempt) await this.delay(200 * attempt);
-        const updated = parseStatus(await this.request('main/getStatus'));
+        let updated: Status;
+        try { updated = parseStatus(await this.request('main/getStatus')); }
+        catch (error) {
+          // Only retry confirmation reads after an acknowledged write. The
+          // write above is sent once, even if every status reply is lost.
+          if (attempt === 3) throw error;
+          continue;
+        }
         if (!confirms || confirms(updated)) {
           const snapshot = await this.snapshot(updated);
           if (command.type !== 'playback' || !['play', 'pause'].includes(command.value) || snapshot.track?.playback === command.value) return snapshot;

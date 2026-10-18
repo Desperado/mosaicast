@@ -142,6 +142,9 @@ export class DeviceSession {
       if (generation === this.generation) {
         if (error instanceof CommandRejectedError || (error instanceof CompanionError && ['busy', 'invalid', 'sequence'].includes(error.code))) {
           this.update({ error: error instanceof CompanionError && error.code === 'busy' ? 'companionBusy' : 'commandRejected' });
+        } else if (error instanceof CompanionError && ['reconcile', 'generation', 'offline'].includes(error.code)) {
+          // These replies reject the operation before any Yamaha write.
+          this.update({ phase: 'stale', needsRefresh: true, error: 'refreshRequired' });
         } else this.update({ phase: 'stale', needsRefresh: true, error: 'uncertainError' });
       }
     } finally {

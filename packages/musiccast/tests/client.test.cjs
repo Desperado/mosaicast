@@ -12,7 +12,7 @@ const features = () => ({
 function device(options = {}) {
   const calls = [];
   const status = { power: 'on', input: 'deezer', volume: 12, max_volume: 63, mute: false, ...options.status };
-  let playback = 'pause';
+  let playback = 'pause', acknowledged = false, confirmationReads = 0;
   const fetcher = async (value, init) => {
     const url = new URL(String(value));
     const route = url.pathname.replace('/YamahaExtendedControl/v1/', '');
@@ -20,7 +20,10 @@ function device(options = {}) {
     let result;
     if (route === 'system/getDeviceInfo') result = { model_name: 'Example Yamaha' };
     else if (route === 'system/getFeatures') result = features();
-    else if (route === 'main/getStatus') result = { ...status };
+    else if (route === 'main/getStatus') {
+      if (acknowledged && ++confirmationReads <= (options.confirmationFailures || 0)) throw new TypeError('Simulated lost status reply');
+      result = { ...status };
+    }
     else if (route === 'netusb/getPlayInfo') {
       if (options.trackFails) throw new TypeError('Simulated unreachable');
       result = { input: status.input, track: 'Example song', artist: 'Example artist', playback };
@@ -33,7 +36,7 @@ function device(options = {}) {
         else if (route === 'main/setVolume') status.volume += url.searchParams.get('volume') === 'up' ? 1 : -1;
         else if (route === 'netusb/setPlayback') playback = url.searchParams.get('playback');
       }
-      result = {};
+      acknowledged = true; result = {};
     }
     return new Response(JSON.stringify({ response_code: 0, ...result }));
   };
@@ -151,4 +154,20 @@ test('demo skips wrap through fictional tracks and clear unsupported-source meta
   await controller.execute({ type: 'input', value: 'server' });
   assert.equal((await controller.read()).track.title, original);
   assert.equal((await controller.read()).track.playback, 'stop');
+});
+
+
+test('an acknowledged volume change survives a lost confirmation read without repeating the write', async () => {
+  const { client, calls } = device({ confirmationFailures: 1 });
+  const result = await client.execute({ type: 'volume', value: 'up' });
+  assert.equal(result.status.volume, 13);
+  assert.equal(writes(calls).length, 1);
+  assert.equal(calls.filter(call => call.route === 'main/getStatus').length, 4);
+});
+
+test('failed confirmation reads stay bounded and require Refresh without repeating the write', async () => {
+  const { client, calls } = device({ confirmationFailures: 4 });
+  await assert.rejects(client.execute({ type: 'volume', value: 'up' }), /result is uncertain/);
+  assert.equal(writes(calls).length, 1);
+  assert.equal(calls.filter(call => call.route === 'main/getStatus').length, 6);
 });

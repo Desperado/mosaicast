@@ -206,8 +206,9 @@ export async function connectPeer(record: PeerRecord, random: PeerRandom, fetche
     const sequence = ++counter;
     const envelope = sealPeer(record.key, { id: record.id, epoch: session, counter: sequence }, { ...(yielded ? {} : { yield: true }), ...(request ? { request } : {}) }, random, 'request');
     // A menu action may chain two 35s menu reads with other Yamaha requests (~100s);
-    // observations, including the yield that makes the phone read Yamaha, are shorter.
-    const reply = await peerJSON(record.url, '/peer/exchange', envelope, fetcher, request ? peerOperationTimeout : 30000) as PeerPacket;
+    // The initial yield may read Yamaha. Later observations only return cached
+    // state, so a missed reply must time out before the 12s authority lease.
+    const reply = await peerJSON(record.url, '/peer/exchange', envelope, fetcher, request ? peerOperationTimeout : yielded ? 3000 : 30000) as PeerPacket;
     if (reply.id !== envelope.id || reply.epoch !== session || reply.counter !== sequence) throw new Error('Invalid response');
     const value = openPeer(record.key, reply, 'response') as CompanionReply;
     if (!value?.state || value.state.version !== 1 || !['observed', 'accepted', 'rejected', 'uncertain'].includes(value.outcome)) throw new Error('Invalid response');
