@@ -3,7 +3,7 @@ import { CompanionController, CompanionCoordinator, MusicCastClient, PhonePeerSe
 import { localSearchAddress } from './discovery';
 import { loadPairing, savePairing } from './pairing-store';
 
-export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; expires?: number; connected?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; saveFailed?: boolean };
+export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; expires?: number; connected?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; startFailed?: boolean; saveFailed?: boolean };
 type PeerRequest = { id: string; method: string; path: string; body: string };
 type PeerNative = {
   addListener(event: 'request', listener: (event: PeerRequest) => void): { remove(): void };
@@ -62,7 +62,7 @@ export class PhoneCompanion implements Controller {
       this.controller = new CompanionController(this.host, service.localExchange);
       this.timer = setInterval(() => { if (this.active) { void coordinator.poll(); this.status(); } }, 2000);
       this.status(); return this.controller;
-    })().catch(error => { if (generation === this.generation) { this.stop(); this.notify({ unavailable: true }); } throw error; });
+    })().catch(error => { if (generation === this.generation) { this.stop(); this.notify(native ? { startFailed: true } : { unavailable: true }); } throw error; });
     return this.ready;
   }
   private stop() {
@@ -77,12 +77,13 @@ export class PhoneCompanion implements Controller {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined; this.ready = undefined;
     native?.stop();
+    this.notify({});
   }
   async acceptInvitation(text: string) { await this.ensure(); this.service!.acceptInvitation(text); this.status(); }
   approve() { this.service?.approve(); this.status(); }
   cancelPairing() { this.service?.cancelPairing(); this.status(); }
   takeControl() { this.service?.takeControl(); this.status(); }
-  close() { this.closed = true; this.stop(); this.notify({}); }
+  close() { this.closed = true; this.stop(); }
   // Restart the listener on return even while a Refresh is pending, so the TV
   // can reconnect. Device reads and writes still wait for the user.
   setActive(active: boolean) {

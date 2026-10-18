@@ -17,6 +17,7 @@ for (const language of ['en', 'uk']) for (const [width, height] of [[320, 568], 
     await page.getByRole('button', {name: t.companion, exact: true}).click();
     await expect(page.getByRole('button', {name: t.scanTVQR, exact: true})).toBeVisible();
     await page.getByRole('button', {name: t.pairingHelp, exact: true}).click();
+    await expect(page.getByText(t.phoneAddressUnavailable, {exact: true})).toBeVisible();
     const address = page.getByRole('textbox', {name: t.ipAddress, exact: true});
     await expect(address).toBeVisible();
     await address.fill('8.8.8.8');

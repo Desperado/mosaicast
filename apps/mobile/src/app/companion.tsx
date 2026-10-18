@@ -25,7 +25,7 @@ export default function Companion() {
   const [permission, requestPermission] = useCameraPermissions();
   const scanLock = useRef(false);
   const [pendingInvitation, setPendingInvitation] = useState<string | undefined>(undefined);
-  const connected = !busy && !peerStatus.qr && !pendingInvitation && !!peerStatus.connected;
+  const connected = !scanning && !busy && !peerStatus.qr && !pendingInvitation && !!peerStatus.connected;
   const deadline = peerStatus.expires ?? expires;
   const expired = (scanned || !!peerStatus.qr) && !connected && now >= deadline;
   const pairing = !failed && !expired && (busy || !!peerStatus.qr || (scanned && !connected));
@@ -89,6 +89,7 @@ export default function Companion() {
     {connected ? <Card>
       <Copy kind="heading">{t('phoneTVConnected')}</Copy>
       <Copy>{t('phoneTVConnectedBody')}</Copy>
+      <Button label={t('scanTVQR')} disabled={!ready || deviceState.busy} onPress={openScanner}/>
       <Button label={t('listen')} primary disabled={deviceState.busy} onPress={async () => { await refresh(); router.replace('/(tabs)/listen'); }}/>
     </Card> : <>
       <Copy>{t('qrBody')}</Copy>
@@ -120,7 +121,7 @@ export default function Companion() {
         <IPAddressInput value={host} onChange={setHost} onSubmit={start} busy={busy} invalid={failed}/>
         <Button label={t(busy ? 'connecting' : 'hostPhone')} disabled={busy || !privateIPv4(host)} onPress={start}/>
       </>}
-      {peerStatus.url && <><Copy>{t('phoneDiscoverable')}</Copy><Copy>{peerStatus.url}</Copy></>}
+      {peerStatus.url ? <><Copy>{t('phoneDiscoverable')}</Copy><Copy>{peerStatus.url}</Copy></> : <Copy>{t('phoneAddressUnavailable')}</Copy>}
       {!pairing && !connected && peerStatus.paired && <Copy>{t('peerPaired')}</Copy>}
       {!pairing && !connected && peerStatus.waiting && <>
         <Copy>{t('peerWaitingAuthority')}</Copy>
@@ -132,6 +133,6 @@ export default function Companion() {
       <Button label={t(peerStatus.approved ? 'waitingTVConfirm' : 'codesMatch')} primary disabled={peerStatus.approved} onPress={approvePeer}/>
       <Button label={t('cancelPairing')} onPress={cancel}/>
     </Card>}
-    {(failed || peerStatus.unavailable) && <Copy accessibilityRole="alert">{t(peerStatus.unavailable ? 'peerNativeRequired' : 'pairingFailed')}</Copy>}
+    {(failed || peerStatus.unavailable || peerStatus.startFailed) && <Copy accessibilityRole="alert">{t(peerStatus.unavailable ? 'peerNativeRequired' : 'pairingFailed')}</Copy>}
   </View></ScrollArea></Screen>;
 }

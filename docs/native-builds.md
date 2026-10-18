@@ -45,7 +45,7 @@ its own provisioning profile; EAS can reuse the team's distribution certificate.
 `app.config.js` selects `APP_VARIANT=development` by default. The `production`
 EAS profile explicitly sets `APP_VARIANT=production`, preserving the official
 `io.github.desperado.mosaicast` identifiers and `mosaicast` URL scheme.
-Version `0.1.0`, iOS build number `15`, and Android version code `5` are local;
+Version `0.1.0`, iOS build number `16`, and Android version code `5` are local;
 increment build numbers before uploading another binary to a store.
 
 When switching variants after a local native build, regenerate the ignored

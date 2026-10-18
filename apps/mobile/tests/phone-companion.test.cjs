@@ -136,6 +136,9 @@ test('scanned QR accepts authenticated pairing and exposes a failed phone save u
     await exchange(); await settle();
     assert.equal(statuses.at(-1).connected, true);
     assert.equal(statuses.at(-1).qr, undefined);
+    companion.setActive(false);
+    assert.equal(statuses.at(-1).connected, undefined, 'a stopped listener must not claim the TV is connected');
+    assert.equal(statuses.at(-1).url, undefined, 'a stopped listener must not advertise its old address');
   } finally { companion.close(); globalThis.fetch = fetch; delete globalThis.peerNative; delete globalThis.peerStore; }
 });
 
@@ -166,4 +169,19 @@ test('foreground restart waits for an in-flight pairing save before loading the 
     assert.equal(native.calls.filter(([name]) => name === 'start').length, 2);
     assert.equal(statuses.at(-1).paired, true);
   } finally { saving.resolve(); companion.close(); globalThis.fetch = fetch; delete globalThis.peerNative; delete globalThis.peerStore; }
+});
+
+
+test('a listener startup failure reports a connection error instead of requesting a new native build', async () => {
+  const native = nativePeer(), statuses = [];
+  native.start = async () => { throw new Error('listener unavailable'); };
+  globalThis.peerNative = native;
+  const { PhoneCompanion } = require('../src/state/phone-companion.ts');
+  const companion = new PhoneCompanion('192.168.1.20', status => statuses.push(status));
+  try {
+    await assert.rejects(companion.read(), /listener unavailable/);
+    assert.equal(statuses.at(-1).startFailed, true);
+    assert.equal(statuses.at(-1).unavailable, undefined);
+    assert.equal(statuses.at(-1).url, undefined);
+  } finally { companion.close(); delete globalThis.peerNative; }
 });
