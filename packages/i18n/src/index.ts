@@ -18,6 +18,10 @@ export const en = {
 
   companionOwned: 'The other app is browsing. You can take over its shared Yamaha menu.', companionBusy: 'Yamaha is busy. Wait for the current operation, then try again.', takeoverMenu: 'Take over menu',
   companion: 'Connect phone + TV', companionBody: 'Connect your Yamaha here, then choose Connect phone + TV on the Frame. Both apps coordinate on your Wi-Fi without a computer. Keep this app open while pairing.',
+  pairingAddressFailed: 'Could not get this iPhone’s local address. Connect the phone to your home Wi-Fi, then scan the TV QR code again.',
+  pairingStorageFailed: 'Could not open the saved pairing on this iPhone. Unlock the phone and try again. Your saved pairing has been kept.',
+  pairingListenerFailed: 'Could not start the connection service on this iPhone. Check Mosaicast’s Local Network access in Settings, then reopen the app and scan a new TV QR code.',
+  pairingReceiverFailed: 'The iPhone’s connection service started, but Yamaha did not return a usable response at the address below. Check that this is Yamaha’s address. The TV is still waiting because pairing has not started.',
   pairingFailed: 'Could not connect. Check Yamaha’s address, Wi-Fi and local-network permission, then try again.',
   companionOwnership: 'Choose Connect phone + TV on both apps for shared control. The active app reads Yamaha before enabling controls.',
 
@@ -119,6 +123,10 @@ export const uk: Record<TranslationKey, string> = {
 
   companionOwned: 'Інший застосунок переглядає меню. Ви можете перебрати спільне меню Yamaha.', companionBusy: 'Yamaha зайнята. Дочекайтеся завершення поточної дії.', takeoverMenu: 'Перебрати меню',
   companion: 'Підключити телефон і ТВ', companionBody: 'Підключіть Yamaha тут, потім виберіть «Підключити телефон і ТВ» на Frame. Застосунки узгоджують роботу через Wi-Fi без комп’ютера. Не закривайте застосунок під час сполучення.',
+  pairingAddressFailed: 'Не вдалося отримати локальну адресу iPhone. Під’єднайте телефон до домашнього Wi-Fi й знову скануйте QR-код ТВ.',
+  pairingStorageFailed: 'Не вдалося відкрити збережену пару на iPhone. Розблокуйте телефон і спробуйте ще раз. Збережену пару не видалено.',
+  pairingListenerFailed: 'Не вдалося запустити сервіс підключення на iPhone. Перевірте доступ Mosaicast до локальної мережі в налаштуваннях, потім відкрийте застосунок заново й скануйте новий QR-код ТВ.',
+  pairingReceiverFailed: 'Сервіс підключення на iPhone запущено, але Yamaha не повернула придатної відповіді за адресою нижче. Перевірте, що це адреса Yamaha. ТВ досі чекає, бо сполучення ще не почалося.',
   pairingFailed: 'Не вдалося підключитися. Перевірте адресу Yamaha, Wi-Fi та дозвіл доступу до локальної мережі.',
   companionOwnership: 'Для спільного керування виберіть «Підключити телефон і ТВ» в обох застосунках. Активний застосунок читає стан Yamaha перед увімкненням керування.',
 

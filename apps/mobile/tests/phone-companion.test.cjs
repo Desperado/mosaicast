@@ -12,8 +12,8 @@ const musiccast = path.resolve(__dirname, '../../../packages/musiccast/dist/inde
 const stubs = {
   // The module reads its native peer once; delegate so each test supplies its own.
   expo: 'export const requireOptionalNativeModule = () => new Proxy({}, { get: (_, key) => globalThis.peerNative[key] });',
-  './discovery': "export const localSearchAddress = async () => '192.168.1.10';",
-  './pairing-store': 'export const loadPairing = async () => globalThis.peerStore?.record; export const savePairing = async value => globalThis.peerStore?.save(value);',
+  './discovery': "export const localSearchAddress = async () => { if (globalThis.peerAddressError) throw new Error('address unavailable'); return '192.168.1.10'; };",
+  './pairing-store': 'export const loadPairing = async () => { if (globalThis.peerStore?.loadError) throw new Error("storage unavailable"); return globalThis.peerStore?.record; }; export const savePairing = async value => globalThis.peerStore?.save(value);',
   '@mosaicast/musiccast': `import { createRequire } from 'node:module'; const m = createRequire(${JSON.stringify(musiccast)})(${JSON.stringify(musiccast)});
 export const { CompanionController, CompanionCoordinator, MusicCastClient, PhonePeerService, peerDeviceFetch } = m;`,
 };
@@ -185,3 +185,27 @@ test('a listener startup failure reports a connection error instead of requestin
     assert.equal(statuses.at(-1).url, undefined);
   } finally { companion.close(); delete globalThis.peerNative; }
 });
+
+for (const failure of ['address', 'storage', 'listener', 'receiver']) {
+  test(`initial ${failure} failure stays specific after DeviceSession closes the listener`, async () => {
+    const native = nativePeer(), statuses = [];
+    globalThis.peerNative = native;
+    globalThis.peerAddressError = failure === 'address';
+    globalThis.peerStore = { loadError: failure === 'storage' };
+    if (failure === 'listener') native.start = async () => { throw new Error('listener unavailable'); };
+    const fetch = globalThis.fetch;
+    globalThis.fetch = async () => { throw new Error('offline'); };
+    const { DeviceSession } = require(musiccast);
+    const { PhoneCompanion } = require('../src/state/phone-companion.ts');
+    const session = new DeviceSession(host => new PhoneCompanion(host, status => statuses.push(status)));
+    try {
+      assert.equal(await session.connect('192.168.1.20'), false);
+      assert.deepEqual(statuses.at(-1), { failure });
+      assert.equal(native.calls.at(-1)[0], 'stop');
+      assert.equal(statuses.at(-1).url, undefined);
+    } finally {
+      session.disconnect(); globalThis.fetch = fetch;
+      delete globalThis.peerNative; delete globalThis.peerAddressError; delete globalThis.peerStore;
+    }
+  });
+}

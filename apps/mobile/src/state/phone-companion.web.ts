@@ -1,5 +1,5 @@
 import type { Controller } from '@mosaicast/musiccast';
-export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; expires?: number; connected?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; startFailed?: boolean; saveFailed?: boolean };
+export type PeerStatus = { url?: string; comparison?: string; qr?: boolean; expires?: number; connected?: boolean; approved?: boolean; paired?: boolean; waiting?: boolean; unavailable?: boolean; startFailed?: boolean; failure?: 'address' | 'storage' | 'listener' | 'receiver'; saveFailed?: boolean };
 export class PhoneCompanion implements Controller {
   readonly mode = 'device' as const;
   constructor(readonly host: string, notify: (status: PeerStatus) => void) { notify({ unavailable: true }); }

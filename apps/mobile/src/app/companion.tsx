@@ -133,6 +133,13 @@ export default function Companion() {
       <Button label={t(peerStatus.approved ? 'waitingTVConfirm' : 'codesMatch')} primary disabled={peerStatus.approved} onPress={approvePeer}/>
       <Button label={t('cancelPairing')} onPress={cancel}/>
     </Card>}
-    {(failed || peerStatus.unavailable || peerStatus.startFailed) && <Copy accessibilityRole="alert">{t(peerStatus.unavailable ? 'peerNativeRequired' : 'pairingFailed')}</Copy>}
+    {(failed || peerStatus.unavailable || peerStatus.startFailed || peerStatus.failure) && <Card>
+      <Copy accessibilityRole="alert">{t(peerStatus.unavailable ? 'peerNativeRequired'
+        : peerStatus.failure === 'address' ? 'pairingAddressFailed'
+        : peerStatus.failure === 'storage' ? 'pairingStorageFailed'
+        : peerStatus.failure === 'listener' ? 'pairingListenerFailed'
+        : peerStatus.failure === 'receiver' ? 'pairingReceiverFailed' : 'pairingFailed')}</Copy>
+      {peerStatus.failure === 'receiver' && <Copy>{deviceState.host}</Copy>}
+    </Card>}
   </View></ScrollArea></Screen>;
 }
