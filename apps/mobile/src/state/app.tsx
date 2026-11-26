@@ -4,8 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocales } from 'expo-localization';
 import { themes } from '@mosaicast/design';
 import { translate, type TranslationKey } from '@mosaicast/i18n';
-import { demoController, DeviceSession, type DeviceState, type Command, type Snapshot } from '@mosaicast/musiccast';
+import { BrowseError, demoController, DeviceSession, type BrowseAction, type DeviceState, type Command, type Snapshot } from '@mosaicast/musiccast';
 import { deviceController } from './device-controller';
+import { useHardwareVolume } from './hardware-volume';
 import { defaults, parsePreferences, preferenceWriter, preferencesKey, resolveAppearance, resolveLanguage, type Preferences } from './preferences';
 
 export const demoRooms = ['livingRoom', 'studio'] as const;
@@ -24,9 +25,11 @@ function useAppState() {
   const [activeRoom, setActiveRoom] = useState<Room>('livingRoom');
   const [controllers] = useState(() => ({ livingRoom: demoController(), studio: demoController() }));
   const [snapshots, setSnapshots] = useState<Partial<Record<DemoRoom, Snapshot>>>({});
+  const [demoBrowse, setDemoBrowse] = useState<Partial<Record<DemoRoom, Pick<DeviceState, 'browse' | 'browseError' | 'browseAccepted'>>>>({});
   const [deviceState, setDeviceState] = useState<DeviceState>({ phase: 'disconnected', busy: false, needsRefresh: false });
   const [session] = useState(() => new DeviceSession(deviceController, setDeviceState));
   const [busy, setBusy] = useState<Partial<Record<Room, boolean>>>({});
+  const [pendingCommands, setPendingCommands] = useState<Partial<Record<DemoRoom, Command>>>({});
   const commandLocks = useRef(new Set<Room>());
   const [commandError, setCommandError] = useState<Room>();
   const [writer] = useState(() => preferenceWriter(value => AsyncStorage.setItem(preferencesKey, value)));
@@ -130,13 +133,14 @@ function useAppState() {
     const room = activeRoom;
     if (commandLocks.current.has(room)) return;
     commandLocks.current.add(room);
+    setPendingCommands(value => ({ ...value, [room]: command }));
     setBusy(value => ({ ...value, [room]: true }));
     setCommandError(undefined);
     try {
       const snapshot = await controllers[room].execute(command);
       setSnapshots(value => ({ ...value, [room]: snapshot }));
     } catch { setCommandError(room); }
-    finally { commandLocks.current.delete(room); setBusy(value => ({ ...value, [room]: false })); }
+    finally { commandLocks.current.delete(room); setBusy(value => ({ ...value, [room]: false })); setPendingCommands(value => ({ ...value, [room]: undefined })); }
   }
 
   async function connect(host: string) {
@@ -148,6 +152,36 @@ function useAppState() {
     return success && session.state.host === host && session.state.phase === 'connected' && preferencesRef.current.mode === 'device';
   }
 
+  const loadBrowse = useCallback(async (input: string, index = 0) => {
+    if (activeRoom === 'device') { await session.loadBrowse(input, index); return; }
+    const room = activeRoom;
+    if (commandLocks.current.has(room)) return;
+    commandLocks.current.add(room);
+    setBusy(value => ({ ...value, [room]: true }));
+    setDemoBrowse(value => ({ ...value, [room]: { browse: value[room]?.browse } }));
+    try {
+      const browse = await controllers[room].browse(input, index);
+      setDemoBrowse(value => ({ ...value, [room]: { browse } }));
+    } catch (error) {
+      setDemoBrowse(value => ({ ...value, [room]: { browseError: error instanceof BrowseError ? error.code : 'browseReadError' } }));
+    } finally { commandLocks.current.delete(room); setBusy(value => ({ ...value, [room]: false })); }
+  }, [activeRoom, controllers, session]);
+
+  async function browseAction(action: BrowseAction) {
+    if (activeRoom === 'device') { await session.browseAction(action); return; }
+    const room = activeRoom;
+    if (commandLocks.current.has(room)) return;
+    commandLocks.current.add(room);
+    setBusy(value => ({ ...value, [room]: true }));
+    try {
+      const result = await controllers[room].browseAction(action);
+      setDemoBrowse(value => ({ ...value, [room]: { browse: result.page, browseAccepted: action.type === 'play' } }));
+      if (result.snapshot) setSnapshots(value => ({ ...value, [room]: result.snapshot }));
+    } catch (error) {
+      setDemoBrowse(value => ({ ...value, [room]: { browseError: error instanceof BrowseError ? error.code : 'browseReadError' } }));
+    } finally { commandLocks.current.delete(room); setBusy(value => ({ ...value, [room]: false })); }
+  }
+
   function startDemo() {
     session.disconnect();
     setActiveRoom('livingRoom');
@@ -157,10 +191,16 @@ function useAppState() {
   const locale = resolveLanguage(preferences.language, locales[0]?.languageCode);
   const theme = resolveAppearance(preferences.appearance, systemTheme);
   const real = activeRoom === 'device';
+  const hardwareVolumeUnavailable = useHardwareVolume(real && deviceState.phase === 'connected' && !deviceState.needsRefresh &&
+    deviceState.snapshot?.status.power === 'on' && typeof deviceState.snapshot.status.volume === 'number' && !!deviceState.snapshot?.features.volumeRange &&
+    deviceState.snapshot.features.controls.includes('volume'), session);
   return { ready, preferences, savePreferences, retryLoadPreferences, resetPreferences, storageError, activeRoom, setActiveRoom, snapshots,
     snapshot: real ? deviceState.snapshot : snapshots[activeRoom], busy: real ? deviceState.busy : busy[activeRoom] ?? false,
+    pendingCommand: real ? deviceState.pendingCommand : pendingCommands[activeRoom],
+    refreshing: real && !!deviceState.refreshing,
     commandError: real ? deviceState.error : commandError === activeRoom ? 'error' as const : undefined,
-    deviceState, real, connect, startDemo, refresh: () => session.refresh(),
+    deviceState, real, connect, startDemo, hardwareVolumeUnavailable, refresh: () => session.refresh(),
+    browseState: real ? deviceState : demoBrowse[activeRoom] ?? {}, loadBrowse, browseAction,
     controlsDisabled: real && (deviceState.phase !== 'connected' || deviceState.needsRefresh),
     execute, locale, theme, colors: themes[theme], t: (key: TranslationKey) => translate(locale, key) };
 }

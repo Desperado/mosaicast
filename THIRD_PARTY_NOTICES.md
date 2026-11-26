@@ -8,6 +8,8 @@ An npm package's license field alone is not a complete license audit.
 The mobile setup originated from the MIT-licensed Expo template. Its notice is
 retained in `licenses/Expo-MIT.txt`. No Expo placeholder images are bundled.
 React, React Native and Expo are external dependencies, not relicensed here.
+Native iPhone volume capture uses the MIT-licensed `react-native-volume-manager`
+by Hirbod Mirjavadi. Its copyright and license are retained in the dependency.
 
 The user-supplied Claude Design archive contains a QualityMax runtime/component
 bundle and remote font imports without accompanying license notices. That

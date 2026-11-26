@@ -53,13 +53,15 @@ accepted and uncertain outcomes are distinct. No raw error is shown as UI copy.
 The adapter addresses a selected or manually supplied private IPv4 host over Yamaha's local
 HTTP API. It currently supports the main zone, capabilities/status, network/USB
 track metadata, explicit on/standby, source switching with autoplay disabled,
-relative volume steps, mute, and network/USB transport. Artwork accepts only
+relative volume steps, mute, network/USB transport, and reported FM/DAB controls. Artwork accepts only
 restricted image paths on the same device origin, without credentials or query
-parameters. Read requests time out after five seconds; redirects are rejected.
+parameters. Ordinary requests time out after five seconds; source-menu reads
+allow 35 seconds for Yamaha's documented 30-second retrieval window. Redirects
+are rejected. Reads, menu operations and commands share one client lock.
 
 The private-address check is deliberately conservative: hostnames, IPv6,
 loopback, public addresses, and addresses ending in .0/.255 are unsupported.
-There is no catalog browser, authentication flow, event
+There is no authentication flow, event
 listener, persistent capability caching, room grouping, absolute-volume slider, or persisted device registry yet.
 Connectivity labels describe advertised support, not enabled settings.
 
@@ -75,7 +77,8 @@ probes and discard late results. The browser module never requests a public IP.
 This bounded HTTP fallback avoids a multicast entitlement, but does not discover
 the actual subnet mask, search other ranges or replace SSDP. Permission denial
 and unreachable devices can both produce an empty result, with manual IP as the
-fallback. Physical-phone discovery and denied-permission flows need validation.
+fallback. A tester confirmed discovery on an iPhone 15 Pro Max; Android and
+denied-permission flows still need validation.
 
 Commands are serialized per client. A write is sent once; only observation reads
 are retried. Power/input/mute/volume require the requested state to be observed.
@@ -98,18 +101,84 @@ and [Expo config plugins](https://docs.expo.dev/config-plugins/plugins/).
 
 The `.web.ts` controller talks to the development-only Node bridge on
 `127.0.0.1:8092`. The bridge validates Host and Origin, limits JSON to 4 KiB,
-accepts only read/known commands and private IPv4 targets, and caches at most
+accepts only read/known commands/typed browse requests and private IPv4 targets, and caches at most
 eight clients so command locks cannot be lost by eviction. Restart it to reset
 the device limit. It bounds concurrent requests to eight. No target URLs,
 credentials, arbitrary Yamaha routes, or raw errors cross this interface.
 Do not run it behind a public server or broaden its bind address/origin list.
+The browser transport allows up to 120 seconds for a browse operation, which
+can include two slow menu reads and status/capability checks.
+
+## Source browsing
+
+The adapter implements the shared main-zone Net/USB menu for reported Deezer,
+server, USB and internet-radio inputs. This is an implementation allowlist,
+not a capability claim: the actual menu can be unavailable. No service account
+endpoints, credentials, thumbnails or external URLs are used.
+
+`getListInfo` pages contain at most eight rows. Absolute row indexes and
+select/play/search attribute bits control available actions. Select enters a
+folder, return moves up one layer, and play specifies the main zone. Search is
+an explicit JSON POST only on an advertised search node; it is not saved or
+included in a URL. Device text uses Yamaha's English fallback because its API
+does not advertise Ukrainian; the surrounding interface is localized.
+
+Each displayed page gets a session token. Before any menu action, the adapter
+refreshes capabilities/status and rereads that same input/page. Changed menu
+contents invalidate the token and require a menu refresh without dispatching
+the action. Other remotes can still change the menu between that read and the
+write: this is a conservative stale-menu check, not an exclusive lock.
+
+Every action is sent once. A failed write or failed follow-up menu read is
+uncertain and disables all session writes until an explicit status refresh;
+the user then refreshes the menu. Playback acknowledgement remains an internal
+outcome; Listen shows observed metadata without claiming that the requested
+track has started. Polling never navigates or replays an action. Generation
+checks discard late browsing results after disconnect or connection replacement.
+Demo catalogs are separate per-room fixtures and never create a device client.
+
+## FM and DAB radio
+
+Only inputs with Yamaha's `play_info_type: tuner` and reported tuner bands expose
+radio controls. FM range/step and preset type/count come from `getFeatures`, not
+model names or demo defaults. `getPlayInfo` supplies FM/RDS or DAB station text.
+Radio metadata failure preserves usable power/volume status and hides unavailable
+tuning actions. Presets preserve device slot indexes and are checked again
+before recall; unknown or empty slots cannot dispatch a command.
+
+FM controls send relative frequency steps or seek. DAB controls change services;
+an off-air service can still be left. An uninitialized DAB list offers an explicit
+scan/cancel only when the receiver advertises `dab_initial_scan`. Band changes
+require an observed matching band. Tuning, service, preset and scan requests are
+accepted once and then observed; asynchronous tuning is not claimed as a
+confirmed station transition. No radio write is retried. Demo radio is fictional
+and uses no real client.
+
+## iPhone volume buttons
+
+The app layer owns the native volume module; the adapter stays independent of
+React Native. While a real connected Yamaha is on and the app is active, iOS
+output-volume changes become relative Yamaha volume commands through the same
+session guards as screen buttons. Busy or stale state rejects presses without
+queuing; uncertain writes require explicit refresh. Reported device limits apply.
+
+iOS exposes output-volume changes rather than public physical-button events.
+The app hides the system overlay, anchors phone output at a midpoint so both
+buttons work at phone-volume endpoints, and ignores its own reset callbacks.
+It restores the original output volume before another capture can start. Capture
+stops on inactivity, standby, disconnection, uncertainty or demo mode. Failure
+restores phone volume and offers screen controls. Native behavior, including
+audio-route changes, requires physical-device testing.
 
 ## Native integration gate
 
 A localhost browser connection to a CD-NT670D verified status, network-track
 metadata, reported sources/capabilities, refresh and read-only restoration.
-UI writes and iOS/Android binaries have not been validated by these checks.
-Build new binaries with the native configuration and test denied access, LAN
+A tester also confirmed connection and discovery in the previous iPhone preview.
+The newest artwork, stable pending controls, FM/DAB controls and source-browsing
+changes need phone/Yamaha validation; automated checks use fixtures. The supplied
+recordings guide regression checks but do not validate the new binary. Build new binaries
+with the native configuration and test denied access, LAN
 reachability, standby wake with Network Standby enabled/disabled, resume,
 response failures and concurrent external remote actions on both platforms.
 

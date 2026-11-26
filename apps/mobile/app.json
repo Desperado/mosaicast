@@ -2,6 +2,7 @@
   "expo": {
     "name": "Mosaicast",
     "slug": "mosaicast",
+    "icon": "./assets/icon.png",
     "scheme": "mosaicast",
     "version": "0.1.0",
     "orientation": "default",
@@ -16,14 +17,14 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "io.github.desperado.mosaicast",
-      "buildNumber": "2"
+      "buildNumber": "7"
     },
     "android": {
       "permissions": [
         "android.permission.INTERNET"
       ],
       "package": "io.github.desperado.mosaicast",
-      "versionCode": 2
+      "versionCode": 5
     },
     "web": {
       "bundler": "metro",
