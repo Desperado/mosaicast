@@ -4,19 +4,29 @@ The `production` EAS profile builds with store signing and increments the iOS
 build number. The `preview` profile remains an internal, direct-install build;
 its binary cannot be uploaded to TestFlight.
 
-## First release scope
+## Current beta
 
-The first TestFlight release is for existing App Store Connect team members
-only. The app record and `Mosaicast Team` internal group were created on
-2026-10-17. External testing and a public App Store release are outside this
-first release. The group uses manual build assignment and currently has no
-testers or builds.
+Join Mosaicast through the [public TestFlight link](https://testflight.apple.com/join/R2UfdCSH).
+
+As of 2026-10-18, **0.1.0 (23)** is uploaded and submitted for external beta
+review, with status **Waiting for Review**. The `Mosaicast Public Beta` external
+group has a public link open to anyone. Testers cannot join until Apple approves
+a build in that group. The `Mosaicast Team` internal group also has build 23
+assigned. This beta is separate from a public App Store release.
+
+- Source revision: `a4ac7deef4fe22936e008d7a80e66ab17a45a04f`
+- Beta description and testing instructions are saved in English and Ukrainian.
+- Export compliance declares app-supplied standard cryptography. Availability
+  in France was set to **No**, as requested by the owner. Reassess the declaration
+  when cryptography or distribution changes.
+- Review contact details are maintained only in App Store Connect.
+- [English and Ukrainian demo screenshots](screenshots/README.md)
 
 App record details:
 
 - Platform: iOS
 - Name: Mosaicast
-- Primary language: English (U.S.); Ukrainian beta copy is drafted below
+- Primary language: English (U.S.); bilingual beta copy is recorded below
 - Bundle ID: `io.github.desperado.mosaicast`
 - SKU: `mosaicast-ios`
 - Apple ID: `6823949587` (configured as `submit.production.ios.ascAppId`)
@@ -26,33 +36,21 @@ An original four-tile icon is configured at `apps/mobile/assets/icon.png`, with
 editable vector source alongside it. It follows the existing app mark and dark
 design tokens. The PNG is an opaque 1024 × 1024 square; iOS applies its own mask.
 
-## Remaining setup
+## Subsequent builds
 
-On 2026-10-17, the non-interactive production-build attempt stopped because store
-signing needs interactive Apple setup. No store build was queued. The configured
-icon passed the opaque 1024 × 1024 RGB check, `npm run check`, and
-`npm run bundle:check`. The owner subsequently signed in and the app record
-and internal group were created. Apple displays an updated Developer Program
-License Agreement notice requiring the Account Holder to review and accept it
-before updating or submitting apps. No agreement was accepted by the agent.
+Build 23 was built locally with EAS and uploaded through EAS Submit after the
+cloud build quota was reached. Store signing and submission are configured.
+Use a new iOS build number for every upload. Run `npm run check` and
+`npm run bundle:check` from the repository root before building.
 
-- The Account Holder must review and accept the updated agreement in their
-  [Apple Developer account](https://developer.apple.com/account).
-- Configure store provisioning and submission credentials through EAS/Apple's
-  secure credential flow. Existing ad hoc signing does not establish that
-  store provisioning or submission access is configured.
-- Assign the processed build to the existing `Mosaicast Team` internal group.
-  Select existing team members who should test it; do not invite external testers.
-- Enter the beta description, feedback email, review contact, and testing notes
-  in App Store Connect. The contact details must come from the owner.
-- Verify privacy/export declarations against the app and its native dependencies.
-  The peer integration adds app-supplied cryptography. Its export classification
-  is not set in the app configuration; complete the App Store Connect encryption
-  questionnaire for the new build before upload. See [Apple’s encryption
-  declaration guidance](https://developer.apple.com/documentation/BundleResources/Information-Property-List/ITSAppUsesNonExemptEncryption).
-- Complete the physical-device checks in [native builds](native-builds.md),
-  including the receiver controls and volume buttons. Browser fixtures are not
-  evidence that these paths passed on a real iPhone.
+Complete the physical-device checks in [native builds](native-builds.md),
+including receiver controls, volume buttons, phone/TV coordination and denied
+local-network permissions. Browser fixtures and demo screenshots are not
+evidence that these paths passed on a real iPhone.
+
+Review export declarations against the app and its native dependencies for each
+release. The peer integration adds app-supplied cryptography; do not declare it
+absent. See [Apple’s encryption declaration guidance](https://developer.apple.com/documentation/BundleResources/Information-Property-List/ITSAppUsesNonExemptEncryption).
 
 Build from `apps/mobile` after running the repository checks:
 
@@ -72,18 +70,22 @@ assignment are separate steps. A public App Store release is also separate.
 Never store passwords, API keys, private keys, signing files, or tokens in the
 repository or chat.
 
-## Draft beta description
+## Submitted beta description
 
-English: Mosaicast controls a compatible Yamaha MusicCast receiver on your home
-network. Test playback, reported sources, source browsing, volume, power, mute,
-and supported FM/DAB controls. A separate demo mode lets you explore the app
-without a receiver. Available controls depend on the connected device.
+English: Mosaicast is an independent controller for compatible Yamaha MusicCast
+devices on your local network. Discover a device or connect by IP address, view
+playback information, browse available sources, and control playback, volume,
+mute and power. Features depend on the connected device. Demo mode lets you
+explore the app without hardware. No Mosaicast account is required. The interface
+is available in English and Ukrainian.
 
-Ukrainian: Mosaicast керує сумісним ресивером Yamaha MusicCast у домашній мережі.
-Перевірте відтворення, доступні джерела та їх перегляд, гучність, живлення,
-вимкнення звуку й підтримувані функції FM/DAB. Окремий деморежим дає змогу
-ознайомитися із застосунком без ресивера. Доступні елементи керування залежать
-від підключеного пристрою.
+Ukrainian: Mosaicast — незалежний застосунок для керування сумісними пристроями
+Yamaha MusicCast у локальній мережі. Знайдіть пристрій або підключіться за
+IP-адресою, переглядайте інформацію про відтворення й доступні джерела, керуйте
+відтворенням, гучністю, вимкненням звуку та живленням. Доступні функції залежать
+від пристрою. Деморежим дозволяє ознайомитися із застосунком без обладнання.
+Обліковий запис Mosaicast не потрібен. Інтерфейс доступний українською та
+англійською.
 
 ## Draft review notes
 
@@ -95,20 +97,16 @@ access, then discover the receiver or enter its private IPv4 address. The app
 discovers supported controls and limits from the receiver. Hardware volume
 capture is active only while eligible real-device control is foregrounded.
 
-## What to test
+## Submitted testing instructions
 
-English: Check that essential Listen controls fit at normal text size and remain
-steady during volume and source changes. Test physical iPhone volume buttons,
-FM/DAB bands and station changes, reported presets, and supported source folders.
-Check English/Ukrainian and light/dark appearance. After a failed or uncertain
-command, refresh before trying another write.
+English: Please test phone–TV pairing and reconnection on the same Wi-Fi network,
+shared Deezer browsing, playback, volume and mute controls, and switching between
+demo and real devices. Report connection errors or unexpected playback behavior.
 
-Ukrainian: Перевірте, чи всі основні елементи екрана прослуховування вміщуються
-за стандартного розміру тексту та залишаються на місці під час зміни гучності й
-джерела. Перевірте фізичні кнопки гучності iPhone, діапазони FM/DAB і перемикання
-станцій, доступні збережені станції та підтримувані папки джерел. Перевірте
-українську й англійську мови, світле й темне оформлення. Після невдалої команди
-або невизначеного результату оновіть стан перед наступною командою керування.
+Ukrainian: Перевірте з’єднання телефона з телевізором і повторне підключення в
+одній Wi-Fi мережі, спільний перегляд Deezer, відтворення, регулювання гучності й
+вимкнення звуку, а також перемикання між деморежимом і реальними пристроями.
+Повідомляйте про помилки з’єднання чи неочікувану поведінку відтворення.
 
 References: [Expo TestFlight distribution](https://docs.expo.dev/submit/testflight/),
 [Expo iOS submission](https://docs.expo.dev/submit/ios/),
